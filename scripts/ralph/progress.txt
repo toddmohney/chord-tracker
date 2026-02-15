@@ -1,0 +1,27 @@
+# Ralph Progress Log
+Started: Sun Feb 15 10:23:08 EST 2026
+---
+
+## Codebase Patterns
+- Frontend uses Vite + React + TypeScript with Tailwind CSS v4 (via `@tailwindcss/vite` plugin)
+- Tailwind v4 uses `@import "tailwindcss"` in CSS instead of `@tailwind` directives
+- React Router v7 used for routing (`react-router-dom`)
+- API proxy configured in vite.config.ts: `/api` -> `http://localhost:8000`
+- Page components live in `frontend/src/pages/`
+- Quality checks: `tsc -b` for typecheck, `npm run lint` for ESLint
+
+---
+
+## 2026-02-15 - US-001
+- Scaffolded React + TypeScript frontend with Vite in `frontend/`
+- Installed and configured Tailwind CSS v4 via `@tailwindcss/vite` plugin
+- Installed React Router v7 with basic route structure (home, login, signup, dashboard)
+- Configured API proxy in vite.config.ts for `/api` -> `http://localhost:8000`
+- Created placeholder page components: Home, Login, Signup, Dashboard
+- Removed Vite boilerplate (App.css, counter demo)
+- Files changed: `frontend/` (entire scaffold), `vite.config.ts`, `src/index.css`, `src/App.tsx`, `src/main.tsx`, `src/pages/*.tsx`
+- **Learnings for future iterations:**
+  - Tailwind CSS v4 uses `@import "tailwindcss"` instead of old `@tailwind base/components/utilities` directives
+  - Vite scaffold includes `.tsx` extension in imports (e.g., `import App from './App.tsx'`) which works but is non-standard; cleaned to extensionless imports
+  - `npm run dev` starts on port 5173 by default
+---

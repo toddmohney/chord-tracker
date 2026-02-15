@@ -1,0 +1,376 @@
+{
+  "project": "Chord Tracker",
+  "branchName": "ralph/chord-tracker-mvp",
+  "description": "Chord Tracker MVP - A SaaS web app for musicians to visually build, save, and organize guitar chord diagrams with an interactive guitar neck editor, project/song/chord hierarchy, and JWT authentication.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Scaffold frontend project",
+      "description": "As a developer, I need a React + TypeScript frontend scaffolded with Vite, Tailwind CSS, and React Router so that I have a working foundation to build on.",
+      "acceptanceCriteria": [
+        "Vite project initialized with React + TypeScript template in `frontend/`",
+        "Tailwind CSS installed and configured",
+        "React Router installed with a basic route structure (home, login, signup, dashboard)",
+        "Proxy configured for API requests to backend during development",
+        "`npm run dev` starts the dev server successfully",
+        "Typecheck passes",
+        "Lint passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Scaffold backend project",
+      "description": "As a developer, I need a FastAPI backend scaffolded with proper project structure so that I can build API endpoints.",
+      "acceptanceCriteria": [
+        "FastAPI project created in `backend/` with uvicorn",
+        "Project structure: `routers/`, `models/`, `schemas/`, `database/`, `auth/`",
+        "SQLAlchemy configured with async support",
+        "Alembic initialized for migrations",
+        "Ruff configured for linting/formatting",
+        "`docker-compose.yml` at project root with PostgreSQL service",
+        "Backend starts and returns 200 on a health-check endpoint",
+        "Lint passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Define database schema and migrations",
+      "description": "As a developer, I need SQLAlchemy models and an initial migration so that the database schema is in place.",
+      "acceptanceCriteria": [
+        "SQLAlchemy models defined for User, Project, Song, Chord matching the data model",
+        "Chord model stores `markers` as a JSON column (array of `{string, fret}` objects)",
+        "Chord model has `position` integer for ordering within a song",
+        "All models use UUID primary keys",
+        "Initial Alembic migration generated and runs successfully against Postgres",
+        "Lint passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "User registration endpoint",
+      "description": "As a new user, I want to create an account with email and password so that I can save my work.",
+      "acceptanceCriteria": [
+        "`POST /auth/register` accepts `{email, password}` and creates a user",
+        "Password is hashed with bcrypt before storage",
+        "Returns 201 with user info (no password hash) on success",
+        "Returns 409 if email already exists",
+        "Email validation (must be valid format)",
+        "Password validation (minimum 8 characters)",
+        "Tests pass for success and error cases",
+        "Lint passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "User login endpoint",
+      "description": "As a returning user, I want to log in so that I can access my projects.",
+      "acceptanceCriteria": [
+        "`POST /auth/login` accepts `{email, password}` and returns access + refresh tokens",
+        "Access token expires in 15 minutes",
+        "Refresh token expires in 7 days",
+        "Returns 401 for invalid credentials",
+        "Tests pass",
+        "Lint passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Token refresh endpoint",
+      "description": "As a logged-in user, I want my session to stay alive without re-entering credentials.",
+      "acceptanceCriteria": [
+        "`POST /auth/refresh` accepts a refresh token and returns a new access token",
+        "Returns 401 for expired or invalid refresh token",
+        "Tests pass",
+        "Lint passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Auth middleware",
+      "description": "As a developer, I need JWT validation middleware so that protected routes can identify the current user.",
+      "acceptanceCriteria": [
+        "FastAPI dependency that extracts and validates JWT from `Authorization: Bearer <token>` header",
+        "Dependency returns current user object or raises 401",
+        "All subsequent API endpoints (projects, songs, chords) use this dependency",
+        "Tests pass",
+        "Lint passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Frontend auth context and route guards",
+      "description": "As a developer, I need an auth context provider and route guards so that the frontend can manage authentication state.",
+      "acceptanceCriteria": [
+        "Auth context/provider that stores tokens and exposes `user`, `login`, `signup`, `logout`",
+        "Tokens stored in memory (access) and localStorage (refresh)",
+        "API client wrapper that attaches Authorization header and handles token refresh",
+        "Route guard redirects unauthenticated users to login",
+        "Route guard redirects authenticated users away from login/signup to dashboard",
+        "Typecheck passes",
+        "Lint passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Frontend signup and login pages",
+      "description": "As a user, I want signup and login pages so that I can create an account and access the app.",
+      "acceptanceCriteria": [
+        "Signup page with email and password fields, submit button, link to login",
+        "Login page with email and password fields, submit button, link to signup",
+        "Form validation shows errors for invalid email or short password",
+        "Submitting calls the auth context login/signup methods",
+        "Successful auth redirects to dashboard",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Project CRUD API",
+      "description": "As a developer, I need REST endpoints for project management so that the frontend can create and manage projects.",
+      "acceptanceCriteria": [
+        "`GET /projects` returns all projects for the authenticated user",
+        "`POST /projects` creates a project with `{name}` for the authenticated user",
+        "`GET /projects/:id` returns a single project (404 if not found, 403 if not owner)",
+        "`PUT /projects/:id` updates project name (403 if not owner)",
+        "`DELETE /projects/:id` deletes project and cascades to songs/chords (403 if not owner)",
+        "Tests pass for CRUD operations and authorization checks",
+        "Lint passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Song CRUD API",
+      "description": "As a developer, I need REST endpoints for song management within projects.",
+      "acceptanceCriteria": [
+        "`GET /projects/:id/songs` returns all songs in a project (validates project ownership)",
+        "`POST /projects/:id/songs` creates a song with `{name}` in the project",
+        "`GET /songs/:id` returns a single song (validates ownership through project)",
+        "`PUT /songs/:id` updates song name",
+        "`DELETE /songs/:id` deletes song and cascades to chords",
+        "Tests pass",
+        "Lint passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Chord CRUD API",
+      "description": "As a developer, I need REST endpoints for chord management within songs.",
+      "acceptanceCriteria": [
+        "`GET /songs/:id/chords` returns all chords in a song, ordered by `position`",
+        "`POST /songs/:id/chords` creates a chord with `{name?, markers, string_count?, tuning?}`",
+        "New chord auto-assigned next position in sequence",
+        "`PUT /chords/:id` updates chord fields (name, markers, tuning, string_count)",
+        "`DELETE /chords/:id` deletes chord and re-normalizes positions",
+        "`PUT /songs/:id/chords/reorder` accepts `{chord_ids: [...]}` and updates positions",
+        "Tests pass",
+        "Lint passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Project list page",
+      "description": "As a user, I want to see all my projects after logging in so that I can pick one to work on.",
+      "acceptanceCriteria": [
+        "Dashboard page shows list of user's projects with name and last-updated date",
+        "\"New Project\" button opens a form/modal to create a project",
+        "Each project card links to the project detail page",
+        "Empty state message when no projects exist",
+        "Project can be renamed inline or via modal",
+        "Project can be deleted with confirmation dialog",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Song list page",
+      "description": "As a user, I want to see all songs in a project so that I can select one to edit.",
+      "acceptanceCriteria": [
+        "Project detail page shows list of songs with name and last-updated date",
+        "\"New Song\" button creates a song",
+        "Each song links to the song detail (chord sequence) page",
+        "Empty state message when no songs exist",
+        "Song can be renamed and deleted",
+        "Breadcrumb navigation: Dashboard → Project",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Guitar neck editor component",
+      "description": "As a user, I want an interactive guitar neck where I can tap fret-string intersections to place or remove finger markers.",
+      "acceptanceCriteria": [
+        "SVG-based React component renders a guitar neck with 5 frets and strings",
+        "Configurable via props: `stringCount` (default 6), `tuning` (default \"EADGBE\"), `markers`, `onMarkerToggle`",
+        "Fret numbers displayed",
+        "String labels displayed based on tuning",
+        "Tap/click a fret-string intersection to toggle a marker on/off",
+        "Markers displayed as filled circles on the neck",
+        "Nut (fret 0) visually distinct",
+        "Touch-friendly: tap targets at least 44x44px",
+        "Responsive: scales to fit container width on mobile and desktop",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Chord sequence view",
+      "description": "As a user, I want to see all chords in a song as an ordered sequence so that I can view and manage my chord progression.",
+      "acceptanceCriteria": [
+        "Song detail page shows ordered list of chord cards",
+        "Each chord card displays: chord name (if set), a mini guitar neck preview of the markers",
+        "\"Add Chord\" button at the end of the sequence",
+        "Empty state when song has no chords",
+        "Breadcrumb navigation: Dashboard → Project → Song",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Add and edit chords",
+      "description": "As a user, I want to create new chords and edit existing ones using the guitar neck editor.",
+      "acceptanceCriteria": [
+        "\"Add Chord\" opens the guitar neck editor in a modal or inline panel",
+        "User can place markers by tapping fret-string intersections",
+        "Optional chord name input field",
+        "\"Save\" persists the chord to the API and adds it to the sequence",
+        "Tapping an existing chord card opens the editor pre-populated with its markers",
+        "\"Save\" on edit updates the chord via API",
+        "\"Cancel\" discards changes",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Reorder and delete chords",
+      "description": "As a user, I want to reorder chords in a song and remove ones I don't need.",
+      "acceptanceCriteria": [
+        "Drag-and-drop reordering on desktop (using dnd-kit or similar)",
+        "Move up/down buttons as alternative (essential for touch/mobile)",
+        "Reorder persists via `PUT /songs/:id/chords/reorder`",
+        "Delete button on each chord card with confirmation",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Chord template data",
+      "description": "As a developer, I need a data file of common chord templates so the template browser can display them.",
+      "acceptanceCriteria": [
+        "TypeScript data file with chord templates: A, Am, B, Bm, C, D, Dm, E, Em, F, G",
+        "Include common barre chord shapes (F barre, B barre)",
+        "Each template has: name, markers array ({string, fret}), string_count, tuning",
+        "Templates are typed with a ChordTemplate interface",
+        "Templates are exportable and importable by other components",
+        "Typecheck passes",
+        "Lint passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Chord template browser UI",
+      "description": "As a user, I want to browse and select from a library of common chord shapes so I don't have to place markers manually.",
+      "acceptanceCriteria": [
+        "\"Browse Templates\" button accessible from the chord editor",
+        "Templates displayed in a searchable/filterable list or grid",
+        "Each template shows chord name and mini neck preview",
+        "Selecting a template populates the guitar neck editor with the chord's markers and name",
+        "User can modify the template markers before saving (template is a starting point, not locked)",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Responsive layout and navigation",
+      "description": "As a mobile user, I want the app to work well on my phone so that I can use it during practice.",
+      "acceptanceCriteria": [
+        "All pages use responsive Tailwind layouts (mobile-first)",
+        "Navigation works on mobile (hamburger menu or bottom nav)",
+        "Guitar neck editor is usable on screens as small as 375px wide",
+        "Touch targets meet minimum 44x44px",
+        "No horizontal scrolling on any page at mobile widths",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
