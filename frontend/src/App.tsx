@@ -5,6 +5,7 @@ import Home from './pages/Home'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
+import ProjectDetail from './pages/ProjectDetail'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           </Route>
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/projects/:id" element={<ProjectDetail />} />
           </Route>
         </Routes>
       </AuthProvider>
