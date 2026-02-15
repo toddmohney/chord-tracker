@@ -12,9 +12,19 @@ Started: Sun Feb 15 10:23:08 EST 2026
 - Backend uses FastAPI + SQLAlchemy (async) + Alembic in `backend/`
 - Backend quality checks: `ruff check .` and `ruff format --check .` from `backend/`
 - Backend venv at `backend/.venv`; activate with `source .venv/bin/activate`
+- All models use UUID primary keys (`sqlalchemy.dialects.postgresql.UUID`)
+- Models: User, Project, Song, Chord in `backend/models/` with cascading deletes
+- Chord `markers` stored as JSON column (array of `{string, fret}` objects)
+- Alembic migrations in `backend/alembic/versions/`; test with `alembic upgrade head --sql`
+- Ruff auto-generated Alembic templates need fixing: use `collections.abc.Sequence` and `X | Y` union syntax
 - Backend DB connection: `postgresql+asyncpg://chord_tracker:chord_tracker@localhost:5432/chord_tracker`
 - Docker Compose at project root for PostgreSQL
 - Health endpoint: `GET /api/health` returns `{"status": "ok"}`
+- Use `bcrypt` directly instead of `passlib[bcrypt]` (passlib has compatibility issues with bcrypt>=4)
+- Tests use SQLite in-memory via `aiosqlite` with FastAPI dependency overrides for `get_db`
+- Test fixtures in `backend/tests/conftest.py`: `setup_db` (auto, creates/drops tables), `client` (httpx AsyncClient)
+- Auth router mounted at `/api/auth` prefix
+- Pydantic schemas in `backend/schemas/`; use `model_config = {"from_attributes": True}` for ORM models
 
 ---
 
@@ -45,4 +55,35 @@ Started: Sun Feb 15 10:23:08 EST 2026
   - Ruff import sorting puts `alembic` before `sqlalchemy` (third-party alphabetical)
   - macOS doesn't have `timeout` command; use background process + kill pattern for server testing
   - FastAPI app uses `/api` prefix on routers to align with frontend proxy config
+---
+
+## 2026-02-15 - US-003
+- Defined SQLAlchemy models for User, Project, Song, Chord with UUID primary keys
+- Chord model stores `markers` as JSON column, has `position` integer for ordering
+- All models have created_at/updated_at timestamps with server defaults
+- Cascade deletes: User->Projects->Songs->Chords
+- Created manual Alembic migration (Docker/Postgres not running, so no autogenerate)
+- Verified migration generates valid SQL via `alembic upgrade head --sql`
+- Files changed: `backend/models/user.py`, `backend/models/project.py`, `backend/models/song.py`, `backend/models/chord.py`, `backend/models/__init__.py`, `backend/alembic/versions/8660a237d474_initial_schema.py`
+- **Learnings for future iterations:**
+  - Alembic autogenerate requires a running database; use `alembic revision -m "name"` for manual migrations when DB is down
+  - Alembic auto-generated template uses old `typing.Union` and `typing.Sequence`; ruff requires `X | Y` and `collections.abc.Sequence`
+  - Test migration validity with `alembic upgrade head --sql` (offline mode) when no DB available
+---
+
+## 2026-02-15 - US-004
+- Implemented `POST /api/auth/register` endpoint with email/password validation
+- Created `auth/passwords.py` with bcrypt password hashing (using `bcrypt` directly, not `passlib`)
+- Created `schemas/user.py` with Pydantic UserCreate (email validation via EmailStr, password min 8 chars) and UserResponse
+- Created `routers/auth.py` with register endpoint: 201 on success, 409 on duplicate email, 422 on validation errors
+- Set up test infrastructure: pytest + pytest-asyncio + httpx + aiosqlite
+- Created `tests/conftest.py` with SQLite in-memory test DB and FastAPI dependency overrides
+- Created `tests/test_auth_register.py` with 6 tests covering success, duplicate email, invalid email, short password, missing fields, and password hash exclusion
+- Updated `requirements.txt`: replaced `passlib[bcrypt]` with `bcrypt`, added test deps
+- Updated `pyproject.toml` with pytest asyncio_mode config
+- Files changed: `backend/auth/passwords.py`, `backend/schemas/user.py`, `backend/routers/auth.py`, `backend/main.py`, `backend/requirements.txt`, `backend/pyproject.toml`, `backend/tests/conftest.py`, `backend/tests/test_auth_register.py`
+- **Learnings for future iterations:**
+  - `passlib[bcrypt]` has compatibility issues with `bcrypt>=4` on Python 3.13; use `bcrypt` directly
+  - SQLite works as test DB substitute via `aiosqlite`; override `get_db` dependency in conftest
+  - pytest-asyncio `asyncio_mode = "auto"` avoids needing `@pytest.mark.asyncio` on every test (though we still use explicit markers for clarity)
 ---
