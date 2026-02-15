@@ -9,6 +9,12 @@ Started: Sun Feb 15 10:23:08 EST 2026
 - API proxy configured in vite.config.ts: `/api` -> `http://localhost:8000`
 - Page components live in `frontend/src/pages/`
 - Quality checks: `tsc -b` for typecheck, `npm run lint` for ESLint
+- Backend uses FastAPI + SQLAlchemy (async) + Alembic in `backend/`
+- Backend quality checks: `ruff check .` and `ruff format --check .` from `backend/`
+- Backend venv at `backend/.venv`; activate with `source .venv/bin/activate`
+- Backend DB connection: `postgresql+asyncpg://chord_tracker:chord_tracker@localhost:5432/chord_tracker`
+- Docker Compose at project root for PostgreSQL
+- Health endpoint: `GET /api/health` returns `{"status": "ok"}`
 
 ---
 
@@ -24,4 +30,19 @@ Started: Sun Feb 15 10:23:08 EST 2026
   - Tailwind CSS v4 uses `@import "tailwindcss"` instead of old `@tailwind base/components/utilities` directives
   - Vite scaffold includes `.tsx` extension in imports (e.g., `import App from './App.tsx'`) which works but is non-standard; cleaned to extensionless imports
   - `npm run dev` starts on port 5173 by default
+---
+
+## 2026-02-15 - US-002
+- Scaffolded FastAPI backend in `backend/` with uvicorn
+- Created project structure: `routers/`, `models/`, `schemas/`, `database/`, `auth/`
+- Configured SQLAlchemy with async support (asyncpg driver)
+- Initialized Alembic for migrations with async engine support
+- Configured Ruff for linting/formatting via `pyproject.toml`
+- Created `docker-compose.yml` at project root with PostgreSQL 16 service
+- Implemented health-check endpoint at `GET /api/health` returning 200
+- Files changed: `backend/` (entire scaffold), `docker-compose.yml`
+- **Learnings for future iterations:**
+  - Ruff import sorting puts `alembic` before `sqlalchemy` (third-party alphabetical)
+  - macOS doesn't have `timeout` command; use background process + kill pattern for server testing
+  - FastAPI app uses `/api` prefix on routers to align with frontend proxy config
 ---
