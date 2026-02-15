@@ -33,6 +33,13 @@ export default function SongDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Editor state
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editingChordId, setEditingChordId] = useState<string | null>(null)
+  const [editorMarkers, setEditorMarkers] = useState<Marker[]>([])
+  const [editorName, setEditorName] = useState('')
+  const [saving, setSaving] = useState(false)
+
   const fetchSong = useCallback(async () => {
     const response = await apiClient(`/api/songs/${id}`)
     if (!response.ok) throw new Error('Failed to fetch song')
@@ -69,16 +76,73 @@ export default function SongDetail() {
     load()
   }, [fetchSong, fetchChords])
 
-  async function handleAddChord() {
+  function openNewChordEditor() {
+    setEditingChordId(null)
+    setEditorMarkers([])
+    setEditorName('')
+    setEditorOpen(true)
+  }
+
+  function openEditChordEditor(chord: Chord) {
+    setEditingChordId(chord.id)
+    setEditorMarkers([...chord.markers])
+    setEditorName(chord.name || '')
+    setEditorOpen(true)
+  }
+
+  function handleMarkerToggle(marker: Marker) {
+    setEditorMarkers((prev) => {
+      const exists = prev.some(
+        (m) => m.string === marker.string && m.fret === marker.fret,
+      )
+      if (exists) {
+        return prev.filter(
+          (m) => !(m.string === marker.string && m.fret === marker.fret),
+        )
+      }
+      return [...prev, marker]
+    })
+  }
+
+  function handleCancel() {
+    setEditorOpen(false)
+    setEditingChordId(null)
+    setEditorMarkers([])
+    setEditorName('')
+  }
+
+  async function handleSave() {
+    setSaving(true)
     try {
-      const response = await apiClient(`/api/songs/${id}/chords`, {
-        method: 'POST',
-        body: { markers: [] },
-      })
-      if (!response.ok) throw new Error('Failed to create chord')
+      if (editingChordId) {
+        // Update existing chord
+        const response = await apiClient(`/api/chords/${editingChordId}`, {
+          method: 'PUT',
+          body: {
+            name: editorName || null,
+            markers: editorMarkers,
+          },
+        })
+        if (!response.ok) throw new Error('Failed to update chord')
+      } else {
+        // Create new chord
+        const response = await apiClient(`/api/songs/${id}/chords`, {
+          method: 'POST',
+          body: {
+            name: editorName || null,
+            markers: editorMarkers,
+          },
+        })
+        if (!response.ok) throw new Error('Failed to create chord')
+      }
       await fetchChords()
+      handleCancel()
     } catch {
-      setError('Failed to add chord')
+      setError(
+        editingChordId ? 'Failed to update chord' : 'Failed to create chord',
+      )
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -137,14 +201,64 @@ export default function SongDetail() {
           </div>
         )}
 
-        {chords.length === 0 ? (
+        {/* Chord Editor Modal */}
+        {editorOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="mx-4 w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+              <h2 className="mb-4 text-lg font-semibold text-gray-900">
+                {editingChordId ? 'Edit Chord' : 'New Chord'}
+              </h2>
+              <div className="mb-4">
+                <label
+                  htmlFor="chord-name"
+                  className="mb-1 block text-sm font-medium text-gray-700"
+                >
+                  Chord Name (optional)
+                </label>
+                <input
+                  id="chord-name"
+                  type="text"
+                  value={editorName}
+                  onChange={(e) => setEditorName(e.target.value)}
+                  placeholder="e.g. Am, G7, Cadd9"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <p className="mb-2 text-xs text-gray-500">
+                Tap fret-string intersections to place or remove markers.
+              </p>
+              <GuitarNeck
+                markers={editorMarkers}
+                onMarkerToggle={handleMarkerToggle}
+                fretCount={5}
+              />
+              <div className="mt-4 flex justify-end gap-3">
+                <button
+                  onClick={handleCancel}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {chords.length === 0 && !editorOpen ? (
           <div className="rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
             <p className="text-gray-500">No chords yet.</p>
             <p className="mt-1 text-sm text-gray-400">
               Add your first chord to start building your progression.
             </p>
             <button
-              onClick={handleAddChord}
+              onClick={openNewChordEditor}
               className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
             >
               Add Chord
@@ -154,9 +268,11 @@ export default function SongDetail() {
           <>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
               {chords.map((chord) => (
-                <div
+                <button
                   key={chord.id}
-                  className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm"
+                  type="button"
+                  onClick={() => openEditChordEditor(chord)}
+                  className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm text-left hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
                 >
                   <p className="mb-2 text-sm font-medium text-gray-900 truncate">
                     {chord.name || 'Untitled'}
@@ -169,12 +285,12 @@ export default function SongDetail() {
                       fretCount={5}
                     />
                   </div>
-                </div>
+                </button>
               ))}
             </div>
             <div className="mt-6">
               <button
-                onClick={handleAddChord}
+                onClick={openNewChordEditor}
                 className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
               >
                 Add Chord
