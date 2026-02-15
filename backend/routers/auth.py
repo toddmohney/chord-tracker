@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.dependencies import get_current_user
 from auth.passwords import hash_password, verify_password
 from auth.tokens import create_access_token, create_refresh_token, decode_token
 from database.session import get_db
@@ -71,3 +72,8 @@ async def refresh(body: RefreshRequest) -> dict[str, str]:
 
     user_id = payload["sub"]
     return {"access_token": create_access_token(user_id)}
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)) -> User:
+    return current_user
