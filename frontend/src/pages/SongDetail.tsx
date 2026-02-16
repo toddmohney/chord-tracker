@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
   DndContext,
   closestCenter,
@@ -18,7 +18,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { apiClient } from '../api/client'
-import { useAuth } from '../auth/useAuth'
+import AppLayout from '../components/AppLayout'
 import GuitarNeck, { type Marker } from '../components/GuitarNeck'
 import { chordTemplates } from '../data/chordTemplates'
 
@@ -219,7 +219,6 @@ function SortableChordCard({
 
 export default function SongDetail() {
   const { id } = useParams<{ id: string }>()
-  const { logout } = useAuth()
   const [song, setSong] = useState<Song | null>(null)
   const [project, setProject] = useState<Project | null>(null)
   const [chords, setChords] = useState<Chord[]>([])
@@ -398,218 +397,194 @@ export default function SongDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <p className="text-gray-500">Loading chords...</p>
       </div>
     )
   }
 
+  const breadcrumbs = [
+    { label: 'Dashboard', to: '/dashboard' },
+    ...(project
+      ? [{ label: project.name, to: `/projects/${project.id}` }]
+      : []),
+    { label: song?.name || 'Song' },
+  ]
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
-        <div className="mx-auto max-w-4xl px-4 py-4 flex items-center justify-between">
-          <div>
-            <nav className="text-sm text-gray-500 mb-1">
-              <Link to="/dashboard" className="hover:text-blue-600">
-                Dashboard
-              </Link>
-              <span className="mx-1">/</span>
-              {project && (
-                <>
-                  <Link
-                    to={`/projects/${project.id}`}
-                    className="hover:text-blue-600"
-                  >
-                    {project.name}
-                  </Link>
-                  <span className="mx-1">/</span>
-                </>
-              )}
-              <span className="text-gray-900">{song?.name}</span>
-            </nav>
-            <h1 className="text-2xl font-bold text-gray-900">{song?.name}</h1>
-          </div>
+    <AppLayout title={song?.name || 'Song'} breadcrumbs={breadcrumbs}>
+      {error && (
+        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {error}
           <button
-            onClick={logout}
-            className="text-sm text-gray-500 hover:text-gray-700"
+            onClick={() => setError('')}
+            className="ml-2 font-medium underline"
           >
-            Log out
+            Dismiss
           </button>
         </div>
-      </header>
+      )}
 
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        {error && (
-          <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
-            {error}
-            <button
-              onClick={() => setError('')}
-              className="ml-2 font-medium underline"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* Chord Editor Modal */}
-        {editorOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="mx-4 w-full max-w-lg rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-              <h2 className="mb-4 text-lg font-semibold text-gray-900">
-                {editingChordId ? 'Edit Chord' : 'New Chord'}
-              </h2>
-              <div className="mb-4">
-                <label
-                  htmlFor="chord-name"
-                  className="mb-1 block text-sm font-medium text-gray-700"
-                >
-                  Chord Name (optional)
-                </label>
-                <input
-                  id="chord-name"
-                  type="text"
-                  value={editorName}
-                  onChange={(e) => setEditorName(e.target.value)}
-                  placeholder="e.g. Am, G7, Cadd9"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div className="mb-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTemplateBrowserOpen(!templateBrowserOpen)
-                    setTemplateSearch('')
-                  }}
-                  className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                >
-                  {templateBrowserOpen
-                    ? 'Hide Templates'
-                    : 'Browse Templates'}
-                </button>
-              </div>
-              {templateBrowserOpen && (
-                <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
-                  <input
-                    type="text"
-                    value={templateSearch}
-                    onChange={(e) => setTemplateSearch(e.target.value)}
-                    placeholder="Search chords..."
-                    className="mb-3 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                    {chordTemplates
-                      .filter((t) =>
-                        t.name
-                          .toLowerCase()
-                          .includes(templateSearch.toLowerCase()),
-                      )
-                      .map((template) => (
-                        <button
-                          key={template.name}
-                          type="button"
-                          onClick={() => {
-                            setEditorMarkers([...template.markers])
-                            setEditorName(template.name)
-                            setTemplateBrowserOpen(false)
-                            setTemplateSearch('')
-                          }}
-                          className="rounded-md border border-gray-200 bg-white p-2 text-center hover:border-blue-400 hover:bg-blue-50"
-                        >
-                          <p className="mb-1 text-xs font-medium text-gray-900">
-                            {template.name}
-                          </p>
-                          <div className="pointer-events-none">
-                            <GuitarNeck
-                              markers={template.markers}
-                              stringCount={template.string_count}
-                              tuning={template.tuning}
-                              fretCount={5}
-                            />
-                          </div>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              )}
-              <p className="mb-2 text-xs text-gray-500">
-                Tap fret-string intersections to place or remove markers.
-              </p>
-              <GuitarNeck
-                markers={editorMarkers}
-                onMarkerToggle={handleMarkerToggle}
-                fretCount={5}
+      {/* Chord Editor Modal */}
+      {editorOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={handleCancel}
+          />
+          <div className="relative w-full max-w-lg rounded-t-lg bg-white p-4 shadow-xl sm:mx-4 sm:rounded-lg sm:p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">
+              {editingChordId ? 'Edit Chord' : 'New Chord'}
+            </h2>
+            <div className="mb-4">
+              <label
+                htmlFor="chord-name"
+                className="mb-1 block text-sm font-medium text-gray-700"
+              >
+                Chord Name (optional)
+              </label>
+              <input
+                id="chord-name"
+                type="text"
+                value={editorName}
+                onChange={(e) => setEditorName(e.target.value)}
+                placeholder="e.g. Am, G7, Cadd9"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
-              <div className="mt-4 flex justify-end gap-3">
-                <button
-                  onClick={handleCancel}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
+            </div>
+            <div className="mb-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setTemplateBrowserOpen(!templateBrowserOpen)
+                  setTemplateSearch('')
+                }}
+                className="text-sm font-medium text-blue-600 hover:text-blue-800"
+              >
+                {templateBrowserOpen ? 'Hide Templates' : 'Browse Templates'}
+              </button>
+            </div>
+            {templateBrowserOpen && (
+              <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
+                <input
+                  type="text"
+                  value={templateSearch}
+                  onChange={(e) => setTemplateSearch(e.target.value)}
+                  placeholder="Search chords..."
+                  className="mb-3 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {chordTemplates
+                    .filter((t) =>
+                      t.name
+                        .toLowerCase()
+                        .includes(templateSearch.toLowerCase()),
+                    )
+                    .map((template) => (
+                      <button
+                        key={template.name}
+                        type="button"
+                        onClick={() => {
+                          setEditorMarkers([...template.markers])
+                          setEditorName(template.name)
+                          setTemplateBrowserOpen(false)
+                          setTemplateSearch('')
+                        }}
+                        className="rounded-md border border-gray-200 bg-white p-2 text-center hover:border-blue-400 hover:bg-blue-50"
+                      >
+                        <p className="mb-1 text-xs font-medium text-gray-900">
+                          {template.name}
+                        </p>
+                        <div className="pointer-events-none">
+                          <GuitarNeck
+                            markers={template.markers}
+                            stringCount={template.string_count}
+                            tuning={template.tuning}
+                            fretCount={5}
+                          />
+                        </div>
+                      </button>
+                    ))}
+                </div>
               </div>
+            )}
+            <p className="mb-2 text-xs text-gray-500">
+              Tap fret-string intersections to place or remove markers.
+            </p>
+            <GuitarNeck
+              markers={editorMarkers}
+              onMarkerToggle={handleMarkerToggle}
+              fretCount={5}
+            />
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={handleCancel}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {chords.length === 0 && !editorOpen ? (
-          <div className="rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
-            <p className="text-gray-500">No chords yet.</p>
-            <p className="mt-1 text-sm text-gray-400">
-              Add your first chord to start building your progression.
-            </p>
+      {chords.length === 0 && !editorOpen ? (
+        <div className="rounded-lg border-2 border-dashed border-gray-300 p-8 text-center sm:p-12">
+          <p className="text-gray-500">No chords yet.</p>
+          <p className="mt-1 text-sm text-gray-400">
+            Add your first chord to start building your progression.
+          </p>
+          <button
+            onClick={openNewChordEditor}
+            className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Add Chord
+          </button>
+        </div>
+      ) : (
+        <>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={chords.map((c) => c.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {chords.map((chord, index) => (
+                  <SortableChordCard
+                    key={chord.id}
+                    chord={chord}
+                    index={index}
+                    total={chords.length}
+                    onEdit={openEditChordEditor}
+                    onDelete={handleDeleteChord}
+                    onMoveUp={handleMoveUp}
+                    onMoveDown={handleMoveDown}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+          <div className="mt-6">
             <button
               onClick={openNewChordEditor}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
             >
               Add Chord
             </button>
           </div>
-        ) : (
-          <>
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={chords.map((c) => c.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-                  {chords.map((chord, index) => (
-                    <SortableChordCard
-                      key={chord.id}
-                      chord={chord}
-                      index={index}
-                      total={chords.length}
-                      onEdit={openEditChordEditor}
-                      onDelete={handleDeleteChord}
-                      onMoveUp={handleMoveUp}
-                      onMoveDown={handleMoveDown}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-            <div className="mt-6">
-              <button
-                onClick={openNewChordEditor}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                Add Chord
-              </button>
-            </div>
-          </>
-        )}
-      </main>
-    </div>
+        </>
+      )}
+    </AppLayout>
   )
 }
