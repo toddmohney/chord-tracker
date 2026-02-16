@@ -1,0 +1,55 @@
+# Ralph Progress Log
+Started: Mon Feb 16 2026
+---
+
+## Codebase Patterns
+- Frontend uses Vite + React + TypeScript with Tailwind CSS v4 (via `@tailwindcss/vite` plugin)
+- `react-refresh/only-export-components` ESLint rule: don't export React context + components from the same file; put context/types in a separate `.ts` file
+- Auth context in `frontend/src/auth/`: `authTypes.ts` (context + types), `AuthContext.tsx` (provider), `useAuth.ts` (hook), `RouteGuards.tsx` (ProtectedRoute/GuestRoute)
+- API client in `frontend/src/api/client.ts`: stores access token in memory, handles auto-refresh with localStorage refresh token
+- Vite proxy forwards `/api` to `http://localhost:8000` WITHOUT rewriting the path (backend routes include `/api` prefix)
+- Tailwind v4 uses `@import "tailwindcss"` in CSS instead of `@tailwind` directives
+- React Router v7 used for routing (`react-router-dom`)
+- API proxy configured in vite.config.ts: `/api` -> `http://localhost:8000`
+- Page components live in `frontend/src/pages/`; reusable components in `frontend/src/components/`
+- Data files (constants, templates) go in `frontend/src/data/`
+- Quality checks: `tsc -b` for typecheck, `npm run lint` for ESLint
+- Backend uses FastAPI + SQLAlchemy (async) + Alembic in `backend/`
+- Backend quality checks: `ruff check .` and `ruff format --check .` from `backend/`
+- Backend venv at `backend/.venv`; activate with `source .venv/bin/activate`
+- All models use UUID primary keys (`sqlalchemy.dialects.postgresql.UUID`)
+- Models: User, Project, Song, Chord in `backend/models/` with cascading deletes
+- Chord `markers` stored as JSON column (array of `{string, fret}` objects)
+- Alembic migrations in `backend/alembic/versions/`; test with `alembic upgrade head --sql`
+- Ruff auto-generated Alembic templates need fixing: use `collections.abc.Sequence` and `X | Y` union syntax
+- Backend DB connection: `postgresql+asyncpg://chord_tracker:chord_tracker@localhost:5432/chord_tracker`
+- Docker Compose at project root for PostgreSQL
+- Health endpoint: `GET /api/health` returns `{"status": "ok"}`
+- Use `bcrypt` directly instead of `passlib[bcrypt]` (passlib has compatibility issues with bcrypt>=4)
+- Tests use SQLite in-memory via `aiosqlite` with FastAPI dependency overrides for `get_db`
+- Test fixtures in `backend/tests/conftest.py`: `setup_db` (auto, creates/drops tables), `client` (httpx AsyncClient)
+- Auth router mounted at `/api/auth` prefix
+- Pydantic schemas in `backend/schemas/`; use `model_config = {"from_attributes": True}` for ORM models
+- JWT tokens use PyJWT (`jwt` module), config in `backend/auth/tokens.py`
+- Access token: 15 min expiry, type="access"; Refresh token: 7 day expiry, type="refresh"
+- Token payload: `{sub: user_id, exp: expiry, type: access|refresh}`
+- Auth dependency: `get_current_user` from `auth/dependencies.py`; use `Depends(get_current_user)` on protected routes
+- Router pattern: create router in `routers/<resource>.py`, register in `main.py` with `prefix="/api/<resource>"`
+- Pydantic schemas in `backend/schemas/<resource>.py` with `model_config = {"from_attributes": True}` for response models
+- Test auth fixtures: `registered_user` (creates via API), `auth_headers` (access token), `other_user`/`other_auth_headers` (for 403 tests)
+- Songs router mounted at `/api` prefix (not `/api/songs`) because it has mixed URL patterns (`/projects/:id/songs` and `/songs/:id`)
+- Chords router mounted at `/api` prefix (same as songs) for mixed URL patterns (`/songs/:id/chords` and `/chords/:id`)
+- Chord ownership validated through chain: chord -> song -> project -> user
+- Chord `markers` stored as JSON; convert Pydantic models to dicts with `model_dump()` before storing
+- Auto-position for new chords: `coalesce(max(position), -1) + 1`
+- Position re-normalization on delete: decrement positions of chords after the deleted one
+- Dashboard (project list) links to `/projects/:id`; new page routes must be added to `App.tsx` inside `<ProtectedRoute>`
+- `apiClient` from `src/api/client.ts` handles auth headers automatically; just pass path and options
+- Song detail (chord sequence) page at `/songs/:id` uses `SongDetail.tsx`; fetches song, then project for breadcrumbs
+- Mini guitar neck preview: use `<GuitarNeck>` with `pointer-events-none` wrapper to disable interaction
+- Protected pages should use `AppLayout` component from `src/components/AppLayout.tsx` for consistent responsive header/nav
+- `AppLayout` accepts `title`, `breadcrumbs` (array of `{label, to?}`), and `children`
+- GuitarNeck component in `frontend/src/components/GuitarNeck.tsx`: SVG-based, props include `stringCount`, `tuning`, `markers`, `onMarkerToggle`, `fretCount`
+- Chord templates in `frontend/src/data/chordTemplates.ts`: `ChordTemplate` interface with `name`, `markers`, `string_count`, `tuning`
+
+---

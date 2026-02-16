@@ -10,6 +10,9 @@ Started: Mon Feb 16 10:26:56 EST 2026
 - Virtual env at `backend/.venv`; run tools with `.venv/bin/python`, `.venv/bin/ruff`, `.venv/bin/pytest`
 - Ruff config in pyproject.toml: line-length 100, selects E/F/I/N/W/UP
 - All 79 tests are async with `asyncio_mode = "auto"`
+- Frontend: React 19 + TypeScript + Vite + Tailwind CSS v4, no frontend test suite
+- GuitarNeck is a stateless SVG component; parent owns marker state, component calls back via `onMarkerToggle`
+- GuitarNeck uses visual fret positions internally (1..fretCount) and maps to absolute fret via `startingFret` offset
 
 ---
 
@@ -25,4 +28,100 @@ Started: Mon Feb 16 10:26:56 EST 2026
   - Alembic autogenerate template doesn't match project lint rules; needs manual cleanup (imports, string style, line length)
   - Router maps fields explicitly — when adding a new model field, must update both create_chord and update_chord in the router
   - Migration needs `server_default` for NOT NULL columns to handle existing rows
+---
+
+## 2026-02-16 - US-002
+- What was implemented: Added `startingFret` optional prop (default 0) to GuitarNeck component with full offset support
+- Changes:
+  - Fret labels display absolute fret numbers (`startingFret + visualFret`)
+  - Nut bar conditionally renders: thick bar when `startingFret === 0`, normal fret line otherwise
+  - Tap targets emit absolute fret numbers (`startingFret + visualPosition`)
+  - `hasMarker` checks against absolute fret values so markers render at correct visual position
+  - Fret 0 (open string) tap targets only render when `startingFret === 0`
+  - Out-of-range markers are naturally excluded since the rendering loop only covers the visible window
+- Files changed:
+  - `frontend/src/components/GuitarNeck.tsx` - Added `startingFret` prop, updated rendering logic
+- **Learnings for future iterations:**
+  - No frontend test suite exists — quality checks are typecheck only (`npx tsc --noEmit`)
+  - The component iterates visual fret positions (1..fretCount) and computes absolute fret as `startingFret + visualFret`
+  - Markers outside the visible fret window don't need explicit filtering — the rendering loop only checks positions within the window
+  - When `startingFret > 0`, there's no "open string" concept — the fret-0 tap targets and nut bar are both hidden
+---
+
+## 2026-02-16 - US-003
+- What was implemented: Added starting fret control to the chord editor UI in SongDetail.tsx
+- Changes:
+  - Added `starting_fret` field to the frontend `Chord` interface
+  - Added `editorStartingFret` state to manage the value in the editor
+  - Added increment (+) and decrement (−) buttons with min 0 / max 19 bounds
+  - Displays current starting fret value as "Starting fret: N" label
+  - Passes `startingFret` to the interactive `GuitarNeck` in the editor
+  - Includes `starting_fret` in both create (POST) and update (PUT) API calls
+  - Pre-populates starting fret when editing an existing chord
+  - Resets starting fret to 0 when opening a new chord or canceling
+- Files changed:
+  - `frontend/src/pages/SongDetail.tsx` - All UI and state changes for starting fret control
+- **Learnings for future iterations:**
+  - All editor state (markers, name, starting fret) needs to be reset in both `openNewChordEditor` and `handleCancel`
+  - The editor modal is inline in SongDetail.tsx, not a separate component — all editor state lives as useState hooks in the SongDetail component
+  - Template browser also renders GuitarNeck previews — future stories may need to pass `startingFret` there too
+---
+
+## 2026-02-16 - US-004
+- What was implemented: Added `starting_fret` field to chord templates and wired it through the template browser UI
+- Changes:
+  - Added `starting_fret: number` to `ChordTemplate` interface
+  - Added `starting_fret: 0` to all existing templates (A, Am, C, D, Dm, E, Em, F, G)
+  - Set `starting_fret: 2` for B and Bm templates (barre chord at 2nd fret)
+  - B and Bm marker fret values unchanged — they were already absolute fret positions
+  - Template selection handler now sets `editorStartingFret` from `template.starting_fret`
+  - Template preview GuitarNeck now receives `startingFret` prop for correct rendering
+- Files changed:
+  - `frontend/src/data/chordTemplates.ts` - Added `starting_fret` to interface and all template objects
+  - `frontend/src/pages/SongDetail.tsx` - Updated template selection handler and preview rendering
+- **Learnings for future iterations:**
+  - Template marker fret values are absolute (not relative to starting_fret) — the GuitarNeck component handles the offset internally
+  - The `ChordTemplate` interface doesn't use optional fields; all fields are required
+  - Template selection sets three pieces of editor state: markers, name, and starting fret
+---
+
+## 2026-02-16 - US-005
+- What was implemented: Passed `startingFret` from chord's `starting_fret` API field to the GuitarNeck component in the SortableChordCard mini preview
+- Files changed:
+  - `frontend/src/pages/SongDetail.tsx` - Added `startingFret={chord.starting_fret ?? 0}` to the card preview GuitarNeck
+- **Learnings for future iterations:**
+  - The chord card preview is in the `SortableChordCard` component (line ~207 in SongDetail.tsx)
+  - This was a one-line change — the GuitarNeck component already handles all offset logic internally
+  - The `Chord` interface already had `starting_fret` from US-003, so no interface changes were needed
+---
+
+## 2026-02-16 - US-006
+- What was implemented: Auto-adjust starting fret when opening an existing chord in the editor
+- Logic:
+  - If chord has no markers, use the saved `starting_fret`
+  - If saved `starting_fret` already makes all markers visible within the 5-fret window, use it
+  - Otherwise, calculate: `min(non-zero fret values) - 1`, clamped to 0, then verify max fret fits
+  - Visible range check accounts for fret 0 (open string) being visible only when `startingFret === 0`
+- Files changed:
+  - `frontend/src/pages/SongDetail.tsx` - Updated `openEditChordEditor` with auto-adjustment logic
+- **Learnings for future iterations:**
+  - The editor fretCount is hardcoded to 5 in multiple places — if this changes, the auto-adjust logic needs updating
+  - The visible fret range is `[startingFret + 1, startingFret + fretCount]` for fretted notes, plus fret 0 only when `startingFret === 0`
+  - Need to handle edge case where all markers are on fret 0 (open strings) — `Math.min(...[])` returns Infinity, so filter for `f > 0` and guard with `Number.isFinite`
+---
+
+## 2026-02-16 - US-007
+- What was implemented: Added out-of-range marker indicators directly in the GuitarNeck component
+- Logic:
+  - Computes visible fret range: `visibleMin` is 0 when `startingFret === 0`, otherwise `startingFret + 1`; `visibleMax` is `startingFret + fretCount`
+  - Filters markers below `visibleMin` and above `visibleMax`
+  - Renders text + arrow indicators in the SVG padding areas (above fretboard for "below" markers, below fretboard for "above" markers)
+  - Uses amber color (#d97706 / fill-amber-600) for visual distinction
+  - Shows count with singular/plural text (e.g., "1 marker below" / "2 markers above")
+- Files changed:
+  - `frontend/src/components/GuitarNeck.tsx` - Added out-of-range marker computation and indicator rendering
+- **Learnings for future iterations:**
+  - Indicators are built into GuitarNeck itself, so they automatically appear everywhere the component is used (editor, card previews, template previews) — no per-usage wiring needed
+  - The SVG padding areas (top: 40px, bottom: 20px) provide enough space for small indicator text without changing the viewBox
+  - The visible range depends on `startingFret`: when 0, fret 0 (open string) is visible; otherwise the range starts at `startingFret + 1`
 ---
