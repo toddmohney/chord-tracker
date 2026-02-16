@@ -14,6 +14,7 @@ class ChordCreate(BaseModel):
     markers: list[MarkerSchema] = Field(default_factory=list)
     string_count: int = 6
     tuning: str = "EADGBE"
+    starting_fret: int = 0
 
 
 class ChordUpdate(BaseModel):
@@ -21,6 +22,7 @@ class ChordUpdate(BaseModel):
     markers: list[MarkerSchema] | None = None
     string_count: int | None = None
     tuning: str | None = None
+    starting_fret: int | None = None
 
 
 class ChordResponse(BaseModel):
@@ -30,6 +32,7 @@ class ChordResponse(BaseModel):
     position: int
     string_count: int
     tuning: str
+    starting_fret: int
     song_id: uuid.UUID
     created_at: datetime
     updated_at: datetime

@@ -92,6 +92,7 @@ async def create_chord(
         position=next_position,
         string_count=data.string_count,
         tuning=data.tuning,
+        starting_fret=data.starting_fret,
         song_id=song_id,
     )
     db.add(chord)
@@ -117,6 +118,8 @@ async def update_chord(
         chord.string_count = data.string_count
     if data.tuning is not None:
         chord.tuning = data.tuning
+    if data.starting_fret is not None:
+        chord.starting_fret = data.starting_fret
 
     await db.commit()
     await db.refresh(chord)
