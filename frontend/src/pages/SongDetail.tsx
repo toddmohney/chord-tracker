@@ -1,5 +1,22 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { apiClient } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import GuitarNeck, { type Marker } from '../components/GuitarNeck'
@@ -24,6 +41,181 @@ interface Chord {
   position: number
 }
 
+interface SortableChordCardProps {
+  chord: Chord
+  index: number
+  total: number
+  onEdit: (chord: Chord) => void
+  onDelete: (chord: Chord) => void
+  onMoveUp: (index: number) => void
+  onMoveDown: (index: number) => void
+}
+
+function SortableChordCard({
+  chord,
+  index,
+  total,
+  onEdit,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+}: SortableChordCardProps) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: chord.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm"
+    >
+      <div className="flex items-start gap-2">
+        {/* Drag handle */}
+        <button
+          type="button"
+          className="mt-1 cursor-grab touch-none text-gray-400 hover:text-gray-600"
+          aria-label="Drag to reorder"
+          {...attributes}
+          {...listeners}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+          >
+            <circle cx="5" cy="3" r="1.5" />
+            <circle cx="11" cy="3" r="1.5" />
+            <circle cx="5" cy="8" r="1.5" />
+            <circle cx="11" cy="8" r="1.5" />
+            <circle cx="5" cy="13" r="1.5" />
+            <circle cx="11" cy="13" r="1.5" />
+          </svg>
+        </button>
+
+        <div className="min-w-0 flex-1">
+          {/* Chord name + actions row */}
+          <div className="mb-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => onEdit(chord)}
+              className="truncate text-sm font-medium text-gray-900 hover:text-blue-600"
+            >
+              {chord.name || 'Untitled'}
+            </button>
+            <div className="ml-2 flex items-center gap-1">
+              {/* Move up */}
+              <button
+                type="button"
+                onClick={() => onMoveUp(index)}
+                disabled={index === 0}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                aria-label="Move up"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M7 11V3M7 3L3 7M7 3l4 4" />
+                </svg>
+              </button>
+              {/* Move down */}
+              <button
+                type="button"
+                onClick={() => onMoveDown(index)}
+                disabled={index === total - 1}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                aria-label="Move down"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M7 3v8M7 11l-4-4M7 11l4-4" />
+                </svg>
+              </button>
+              {/* Delete */}
+              {confirmingDelete ? (
+                <span className="flex items-center gap-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => onDelete(chord)}
+                    className="rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(false)}
+                    className="rounded border border-gray-300 px-2 py-0.5 text-gray-600 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  aria-label="Delete chord"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 14 14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M2 4h10M5 4V2h4v2M5 6v5M9 6v5M3 4l1 8h6l1-8" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Mini guitar neck preview */}
+          <button
+            type="button"
+            onClick={() => onEdit(chord)}
+            className="block w-full cursor-pointer"
+          >
+            <div className="pointer-events-none">
+              <GuitarNeck
+                markers={chord.markers}
+                stringCount={chord.string_count || 6}
+                tuning={chord.tuning || 'EADGBE'}
+                fretCount={5}
+              />
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SongDetail() {
   const { id } = useParams<{ id: string }>()
   const { logout } = useAuth()
@@ -39,6 +231,13 @@ export default function SongDetail() {
   const [editorMarkers, setEditorMarkers] = useState<Marker[]>([])
   const [editorName, setEditorName] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
 
   const fetchSong = useCallback(async () => {
     const response = await apiClient(`/api/songs/${id}`)
@@ -75,6 +274,54 @@ export default function SongDetail() {
     }
     load()
   }, [fetchSong, fetchChords])
+
+  async function persistReorder(reorderedChords: Chord[]) {
+    const response = await apiClient(`/api/songs/${id}/chords/reorder`, {
+      method: 'PUT',
+      body: { chord_ids: reorderedChords.map((c) => c.id) },
+    })
+    if (!response.ok) {
+      setError('Failed to reorder chords')
+      await fetchChords()
+    }
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = chords.findIndex((c) => c.id === active.id)
+    const newIndex = chords.findIndex((c) => c.id === over.id)
+    const reordered = arrayMove(chords, oldIndex, newIndex)
+    setChords(reordered)
+    await persistReorder(reordered)
+  }
+
+  async function handleMoveUp(index: number) {
+    if (index === 0) return
+    const reordered = arrayMove(chords, index, index - 1)
+    setChords(reordered)
+    await persistReorder(reordered)
+  }
+
+  async function handleMoveDown(index: number) {
+    if (index === chords.length - 1) return
+    const reordered = arrayMove(chords, index, index + 1)
+    setChords(reordered)
+    await persistReorder(reordered)
+  }
+
+  async function handleDeleteChord(chord: Chord) {
+    try {
+      const response = await apiClient(`/api/chords/${chord.id}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) throw new Error('Failed to delete chord')
+      await fetchChords()
+    } catch {
+      setError('Failed to delete chord')
+    }
+  }
 
   function openNewChordEditor() {
     setEditingChordId(null)
@@ -115,7 +362,6 @@ export default function SongDetail() {
     setSaving(true)
     try {
       if (editingChordId) {
-        // Update existing chord
         const response = await apiClient(`/api/chords/${editingChordId}`, {
           method: 'PUT',
           body: {
@@ -125,7 +371,6 @@ export default function SongDetail() {
         })
         if (!response.ok) throw new Error('Failed to update chord')
       } else {
-        // Create new chord
         const response = await apiClient(`/api/songs/${id}/chords`, {
           method: 'POST',
           body: {
@@ -266,28 +511,31 @@ export default function SongDetail() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-              {chords.map((chord) => (
-                <button
-                  key={chord.id}
-                  type="button"
-                  onClick={() => openEditChordEditor(chord)}
-                  className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm text-left hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
-                >
-                  <p className="mb-2 text-sm font-medium text-gray-900 truncate">
-                    {chord.name || 'Untitled'}
-                  </p>
-                  <div className="pointer-events-none">
-                    <GuitarNeck
-                      markers={chord.markers}
-                      stringCount={chord.string_count || 6}
-                      tuning={chord.tuning || 'EADGBE'}
-                      fretCount={5}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={chords.map((c) => c.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                  {chords.map((chord, index) => (
+                    <SortableChordCard
+                      key={chord.id}
+                      chord={chord}
+                      index={index}
+                      total={chords.length}
+                      onEdit={openEditChordEditor}
+                      onDelete={handleDeleteChord}
+                      onMoveUp={handleMoveUp}
+                      onMoveDown={handleMoveDown}
                     />
-                  </div>
-                </button>
-              ))}
-            </div>
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
             <div className="mt-6">
               <button
                 onClick={openNewChordEditor}
