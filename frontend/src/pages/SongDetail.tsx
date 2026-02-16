@@ -209,6 +209,7 @@ function SortableChordCard({
                 stringCount={chord.string_count || 6}
                 tuning={chord.tuning || 'EADGBE'}
                 fretCount={5}
+                startingFret={chord.starting_fret ?? 0}
               />
             </div>
           </button>
