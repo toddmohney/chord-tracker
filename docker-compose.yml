@@ -10,5 +10,21 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://chord_tracker:chord_tracker@postgres:5432/chord_tracker
+    depends_on:
+      - postgres
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
 volumes:
   pgdata:

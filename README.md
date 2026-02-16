@@ -1,17 +1,38 @@
 # Chord Tracker
 
-## Running Locally
+## Running with Docker
 
 ### Prerequisites
 
 - Docker and Docker Compose
+
+### Start the full stack
+
+```sh
+docker compose up -d --build
+```
+
+- Frontend: http://localhost:3000
+- API docs: http://localhost:8000/docs
+
+To stop everything:
+
+```sh
+docker compose down
+```
+
+## Running Locally (without Docker)
+
+### Prerequisites
+
+- Docker and Docker Compose (for PostgreSQL)
 - Python 3.11+
 - Node.js (with npm)
 
 ### 1. Start the Database
 
 ```sh
-docker compose up -d
+docker compose up -d postgres
 ```
 
 This starts a PostgreSQL 16 instance on port 5432.
