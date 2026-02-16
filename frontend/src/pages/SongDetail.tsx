@@ -340,7 +340,34 @@ export default function SongDetail() {
     setEditingChordId(chord.id)
     setEditorMarkers([...chord.markers])
     setEditorName(chord.name || '')
-    setEditorStartingFret(chord.starting_fret ?? 0)
+
+    const fretCount = 5
+    const savedStart = chord.starting_fret ?? 0
+    const fretValues = chord.markers.map((m) => m.fret)
+
+    if (fretValues.length === 0) {
+      setEditorStartingFret(savedStart)
+    } else {
+      const maxFret = Math.max(...fretValues)
+      const allVisible = fretValues.every(
+        (f) =>
+          (savedStart === 0 && f === 0) ||
+          (f >= savedStart + 1 && f <= savedStart + fretCount),
+      )
+      if (allVisible) {
+        setEditorStartingFret(savedStart)
+      } else {
+        const minFret = Math.min(...fretValues.filter((f) => f > 0))
+        const adjusted = Math.max(0, (Number.isFinite(minFret) ? minFret : 1) - 1)
+        // Ensure all markers fit: if max fret exceeds adjusted + fretCount, shift up
+        if (maxFret > adjusted + fretCount) {
+          setEditorStartingFret(Math.max(0, maxFret - fretCount))
+        } else {
+          setEditorStartingFret(adjusted)
+        }
+      }
+    }
+
     setEditorOpen(true)
   }
 
