@@ -60,6 +60,12 @@ export default function GuitarNeck({
   const markerRadius = 14
   const tapTargetSize = 44
 
+  // Compute out-of-range markers
+  const visibleMin = startingFret === 0 ? 0 : startingFret + 1
+  const visibleMax = startingFret + fretCount
+  const markersBelow = markers.filter((m) => m.fret < visibleMin)
+  const markersAbove = markers.filter((m) => m.fret > visibleMax)
+
   return (
     <svg
       viewBox={`0 0 ${svgWidth} ${svgHeight}`}
@@ -197,6 +203,50 @@ export default function GuitarNeck({
             )
           })
         },
+      )}
+
+      {/* Out-of-range marker indicators */}
+      {markersBelow.length > 0 && (
+        <g>
+          <text
+            x={padding.left + neckWidth / 2}
+            y={12}
+            textAnchor="middle"
+            className="fill-amber-600"
+            fontSize={10}
+          >
+            {markersBelow.length === 1
+              ? `1 marker below`
+              : `${markersBelow.length} markers below`}
+          </text>
+          <path
+            d={`M${padding.left + neckWidth / 2 - 4} 18 l4 -5 l4 5`}
+            fill="none"
+            stroke="#d97706"
+            strokeWidth={1.5}
+          />
+        </g>
+      )}
+      {markersAbove.length > 0 && (
+        <g>
+          <text
+            x={padding.left + neckWidth / 2}
+            y={svgHeight - 2}
+            textAnchor="middle"
+            className="fill-amber-600"
+            fontSize={10}
+          >
+            {markersAbove.length === 1
+              ? `1 marker above`
+              : `${markersAbove.length} markers above`}
+          </text>
+          <path
+            d={`M${padding.left + neckWidth / 2 - 4} ${svgHeight - 16} l4 5 l4 -5`}
+            fill="none"
+            stroke="#d97706"
+            strokeWidth={1.5}
+          />
+        </g>
       )}
     </svg>
   )
