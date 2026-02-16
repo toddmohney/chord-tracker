@@ -494,6 +494,7 @@ export default function SongDetail() {
                         onClick={() => {
                           setEditorMarkers([...template.markers])
                           setEditorName(template.name)
+                          setEditorStartingFret(template.starting_fret)
                           setTemplateBrowserOpen(false)
                           setTemplateSearch('')
                         }}
@@ -508,6 +509,7 @@ export default function SongDetail() {
                             stringCount={template.string_count}
                             tuning={template.tuning}
                             fretCount={5}
+                            startingFret={template.starting_fret}
                           />
                         </div>
                       </button>
