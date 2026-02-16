@@ -20,6 +20,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { apiClient } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import GuitarNeck, { type Marker } from '../components/GuitarNeck'
+import { chordTemplates } from '../data/chordTemplates'
 
 interface Song {
   id: string
@@ -231,6 +232,8 @@ export default function SongDetail() {
   const [editorMarkers, setEditorMarkers] = useState<Marker[]>([])
   const [editorName, setEditorName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [templateBrowserOpen, setTemplateBrowserOpen] = useState(false)
+  const [templateSearch, setTemplateSearch] = useState('')
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -356,6 +359,8 @@ export default function SongDetail() {
     setEditingChordId(null)
     setEditorMarkers([])
     setEditorName('')
+    setTemplateBrowserOpen(false)
+    setTemplateSearch('')
   }
 
   async function handleSave() {
@@ -449,7 +454,7 @@ export default function SongDetail() {
         {/* Chord Editor Modal */}
         {editorOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="mx-4 w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+            <div className="mx-4 w-full max-w-lg rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
               <h2 className="mb-4 text-lg font-semibold text-gray-900">
                 {editingChordId ? 'Edit Chord' : 'New Chord'}
               </h2>
@@ -469,6 +474,64 @@ export default function SongDetail() {
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
+              <div className="mb-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTemplateBrowserOpen(!templateBrowserOpen)
+                    setTemplateSearch('')
+                  }}
+                  className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                >
+                  {templateBrowserOpen
+                    ? 'Hide Templates'
+                    : 'Browse Templates'}
+                </button>
+              </div>
+              {templateBrowserOpen && (
+                <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
+                  <input
+                    type="text"
+                    value={templateSearch}
+                    onChange={(e) => setTemplateSearch(e.target.value)}
+                    placeholder="Search chords..."
+                    className="mb-3 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {chordTemplates
+                      .filter((t) =>
+                        t.name
+                          .toLowerCase()
+                          .includes(templateSearch.toLowerCase()),
+                      )
+                      .map((template) => (
+                        <button
+                          key={template.name}
+                          type="button"
+                          onClick={() => {
+                            setEditorMarkers([...template.markers])
+                            setEditorName(template.name)
+                            setTemplateBrowserOpen(false)
+                            setTemplateSearch('')
+                          }}
+                          className="rounded-md border border-gray-200 bg-white p-2 text-center hover:border-blue-400 hover:bg-blue-50"
+                        >
+                          <p className="mb-1 text-xs font-medium text-gray-900">
+                            {template.name}
+                          </p>
+                          <div className="pointer-events-none">
+                            <GuitarNeck
+                              markers={template.markers}
+                              stringCount={template.string_count}
+                              tuning={template.tuning}
+                              fretCount={5}
+                            />
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
               <p className="mb-2 text-xs text-gray-500">
                 Tap fret-string intersections to place or remove markers.
               </p>
