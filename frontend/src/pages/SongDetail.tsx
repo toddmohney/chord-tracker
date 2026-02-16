@@ -40,6 +40,7 @@ interface Chord {
   string_count: number
   tuning: string
   position: number
+  starting_fret: number
 }
 
 interface SortableChordCardProps {
@@ -208,6 +209,7 @@ function SortableChordCard({
                 stringCount={chord.string_count || 6}
                 tuning={chord.tuning || 'EADGBE'}
                 fretCount={5}
+                startingFret={chord.starting_fret ?? 0}
               />
             </div>
           </button>
@@ -231,6 +233,7 @@ export default function SongDetail() {
   const [editorMarkers, setEditorMarkers] = useState<Marker[]>([])
   const [editorName, setEditorName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [editorStartingFret, setEditorStartingFret] = useState(0)
   const [templateBrowserOpen, setTemplateBrowserOpen] = useState(false)
   const [templateSearch, setTemplateSearch] = useState('')
 
@@ -329,6 +332,7 @@ export default function SongDetail() {
     setEditingChordId(null)
     setEditorMarkers([])
     setEditorName('')
+    setEditorStartingFret(0)
     setEditorOpen(true)
   }
 
@@ -336,6 +340,34 @@ export default function SongDetail() {
     setEditingChordId(chord.id)
     setEditorMarkers([...chord.markers])
     setEditorName(chord.name || '')
+
+    const fretCount = 5
+    const savedStart = chord.starting_fret ?? 0
+    const fretValues = chord.markers.map((m) => m.fret)
+
+    if (fretValues.length === 0) {
+      setEditorStartingFret(savedStart)
+    } else {
+      const maxFret = Math.max(...fretValues)
+      const allVisible = fretValues.every(
+        (f) =>
+          (savedStart === 0 && f === 0) ||
+          (f >= savedStart + 1 && f <= savedStart + fretCount),
+      )
+      if (allVisible) {
+        setEditorStartingFret(savedStart)
+      } else {
+        const minFret = Math.min(...fretValues.filter((f) => f > 0))
+        const adjusted = Math.max(0, (Number.isFinite(minFret) ? minFret : 1) - 1)
+        // Ensure all markers fit: if max fret exceeds adjusted + fretCount, shift up
+        if (maxFret > adjusted + fretCount) {
+          setEditorStartingFret(Math.max(0, maxFret - fretCount))
+        } else {
+          setEditorStartingFret(adjusted)
+        }
+      }
+    }
+
     setEditorOpen(true)
   }
 
@@ -358,6 +390,7 @@ export default function SongDetail() {
     setEditingChordId(null)
     setEditorMarkers([])
     setEditorName('')
+    setEditorStartingFret(0)
     setTemplateBrowserOpen(false)
     setTemplateSearch('')
   }
@@ -371,6 +404,7 @@ export default function SongDetail() {
           body: {
             name: editorName || null,
             markers: editorMarkers,
+            starting_fret: editorStartingFret,
           },
         })
         if (!response.ok) throw new Error('Failed to update chord')
@@ -380,6 +414,7 @@ export default function SongDetail() {
           body: {
             name: editorName || null,
             markers: editorMarkers,
+            starting_fret: editorStartingFret,
           },
         })
         if (!response.ok) throw new Error('Failed to create chord')
@@ -487,6 +522,7 @@ export default function SongDetail() {
                         onClick={() => {
                           setEditorMarkers([...template.markers])
                           setEditorName(template.name)
+                          setEditorStartingFret(template.starting_fret)
                           setTemplateBrowserOpen(false)
                           setTemplateSearch('')
                         }}
@@ -501,6 +537,7 @@ export default function SongDetail() {
                             stringCount={template.string_count}
                             tuning={template.tuning}
                             fretCount={5}
+                            startingFret={template.starting_fret}
                           />
                         </div>
                       </button>
@@ -508,6 +545,35 @@ export default function SongDetail() {
                 </div>
               </div>
             )}
+            <div className="mb-3 flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-700">
+                Starting fret: {editorStartingFret}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditorStartingFret((f) => Math.max(0, f - 1))
+                  }
+                  disabled={editorStartingFret <= 0}
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-30"
+                  aria-label="Decrease starting fret"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditorStartingFret((f) => Math.min(19, f + 1))
+                  }
+                  disabled={editorStartingFret >= 19}
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-30"
+                  aria-label="Increase starting fret"
+                >
+                  +
+                </button>
+              </div>
+            </div>
             <p className="mb-2 text-xs text-gray-500">
               Tap fret-string intersections to place or remove markers.
             </p>
@@ -515,6 +581,7 @@ export default function SongDetail() {
               markers={editorMarkers}
               onMarkerToggle={handleMarkerToggle}
               fretCount={5}
+              startingFret={editorStartingFret}
             />
             <div className="mt-4 flex justify-end gap-3">
               <button

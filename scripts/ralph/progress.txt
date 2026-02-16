@@ -1,401 +1,127 @@
 # Ralph Progress Log
-Started: Sun Feb 15 10:23:08 EST 2026
+Started: Mon Feb 16 10:26:56 EST 2026
 ---
 
 ## Codebase Patterns
-- Frontend uses Vite + React + TypeScript with Tailwind CSS v4 (via `@tailwindcss/vite` plugin)
-- `react-refresh/only-export-components` ESLint rule: don't export React context + components from the same file; put context/types in a separate `.ts` file
-- Auth context in `frontend/src/auth/`: `authTypes.ts` (context + types), `AuthContext.tsx` (provider), `useAuth.ts` (hook), `RouteGuards.tsx` (ProtectedRoute/GuestRoute)
-- API client in `frontend/src/api/client.ts`: stores access token in memory, handles auto-refresh with localStorage refresh token
-- Vite proxy forwards `/api` to `http://localhost:8000` WITHOUT rewriting the path (backend routes include `/api` prefix)
-- Tailwind v4 uses `@import "tailwindcss"` in CSS instead of `@tailwind` directives
-- React Router v7 used for routing (`react-router-dom`)
-- API proxy configured in vite.config.ts: `/api` -> `http://localhost:8000`
-- Page components live in `frontend/src/pages/`; reusable components in `frontend/src/components/`
-- Data files (constants, templates) go in `frontend/src/data/`
-- Quality checks: `tsc -b` for typecheck, `npm run lint` for ESLint
-- Backend uses FastAPI + SQLAlchemy (async) + Alembic in `backend/`
-- Backend quality checks: `ruff check .` and `ruff format --check .` from `backend/`
-- Backend venv at `backend/.venv`; activate with `source .venv/bin/activate`
-- All models use UUID primary keys (`sqlalchemy.dialects.postgresql.UUID`)
-- Models: User, Project, Song, Chord in `backend/models/` with cascading deletes
-- Chord `markers` stored as JSON column (array of `{string, fret}` objects)
-- Alembic migrations in `backend/alembic/versions/`; test with `alembic upgrade head --sql`
-- Ruff auto-generated Alembic templates need fixing: use `collections.abc.Sequence` and `X | Y` union syntax
-- Backend DB connection: `postgresql+asyncpg://chord_tracker:chord_tracker@localhost:5432/chord_tracker`
-- Docker Compose at project root for PostgreSQL
-- Health endpoint: `GET /api/health` returns `{"status": "ok"}`
-- Use `bcrypt` directly instead of `passlib[bcrypt]` (passlib has compatibility issues with bcrypt>=4)
-- Tests use SQLite in-memory via `aiosqlite` with FastAPI dependency overrides for `get_db`
-- Test fixtures in `backend/tests/conftest.py`: `setup_db` (auto, creates/drops tables), `client` (httpx AsyncClient)
-- Auth router mounted at `/api/auth` prefix
-- Pydantic schemas in `backend/schemas/`; use `model_config = {"from_attributes": True}` for ORM models
-- JWT tokens use PyJWT (`jwt` module), config in `backend/auth/tokens.py`
-- Access token: 15 min expiry, type="access"; Refresh token: 7 day expiry, type="refresh"
-- Token payload: `{sub: user_id, exp: expiry, type: access|refresh}`
-- Auth dependency: `get_current_user` from `auth/dependencies.py`; use `Depends(get_current_user)` on protected routes
-- Router pattern: create router in `routers/<resource>.py`, register in `main.py` with `prefix="/api/<resource>"`
-- Pydantic schemas in `backend/schemas/<resource>.py` with `model_config = {"from_attributes": True}` for response models
-- Test auth fixtures: `registered_user` (creates via API), `auth_headers` (access token), `other_user`/`other_auth_headers` (for 403 tests)
-- Songs router mounted at `/api` prefix (not `/api/songs`) because it has mixed URL patterns (`/projects/:id/songs` and `/songs/:id`)
-- Ownership validation for nested resources (song->project->user): use helper functions like `_get_owned_song` that check ownership through parent
-- Chords router mounted at `/api` prefix (same as songs) for mixed URL patterns (`/songs/:id/chords` and `/chords/:id`)
-- Chord ownership validated through chain: chord -> song -> project -> user
-- Chord `markers` stored as JSON; convert Pydantic models to dicts with `model_dump()` before storing
-- Auto-position for new chords: `coalesce(max(position), -1) + 1`
-- Position re-normalization on delete: decrement positions of chords after the deleted one
-- Dashboard (project list) links to `/projects/:id`; new page routes must be added to `App.tsx` inside `<ProtectedRoute>`
-- `apiClient` from `src/api/client.ts` handles auth headers automatically; just pass path and options
-- Song list page at `/projects/:id` uses `ProjectDetail.tsx`; songs link to `/songs/:id` (future route for chord sequence page)
-- Song detail (chord sequence) page at `/songs/:id` uses `SongDetail.tsx`; fetches song, then project for breadcrumbs
-- Mini guitar neck preview: use `<GuitarNeck>` with `pointer-events-none` wrapper to disable interaction
-- New routes must be added inside `<ProtectedRoute>` in `App.tsx`
-- Protected pages should use `AppLayout` component from `src/components/AppLayout.tsx` for consistent responsive header/nav
-- `AppLayout` accepts `title`, `breadcrumbs` (array of `{label, to?}`), and `children`
+- Backend uses SQLAlchemy 2.0+ with `Mapped` and `mapped_column` style
+- Pydantic schemas: `Create` has defaults, `Update` has all optional fields, `Response` has `from_attributes`
+- Alembic migrations use `collections.abc.Sequence`, import style: `from alembic import op`
+- Router manually maps schema fields to model constructor (no `**data.model_dump()`)
+- Virtual env at `backend/.venv`; run tools with `.venv/bin/python`, `.venv/bin/ruff`, `.venv/bin/pytest`
+- Ruff config in pyproject.toml: line-length 100, selects E/F/I/N/W/UP
+- All 79 tests are async with `asyncio_mode = "auto"`
+- Frontend: React 19 + TypeScript + Vite + Tailwind CSS v4, no frontend test suite
+- GuitarNeck is a stateless SVG component; parent owns marker state, component calls back via `onMarkerToggle`
+- GuitarNeck uses visual fret positions internally (1..fretCount) and maps to absolute fret via `startingFret` offset
 
 ---
 
-## 2026-02-15 - US-001
-- Scaffolded React + TypeScript frontend with Vite in `frontend/`
-- Installed and configured Tailwind CSS v4 via `@tailwindcss/vite` plugin
-- Installed React Router v7 with basic route structure (home, login, signup, dashboard)
-- Configured API proxy in vite.config.ts for `/api` -> `http://localhost:8000`
-- Created placeholder page components: Home, Login, Signup, Dashboard
-- Removed Vite boilerplate (App.css, counter demo)
-- Files changed: `frontend/` (entire scaffold), `vite.config.ts`, `src/index.css`, `src/App.tsx`, `src/main.tsx`, `src/pages/*.tsx`
+## 2026-02-16 - US-001
+- What was implemented: Added `starting_fret` integer field (default 0) to the Chord model, Pydantic schemas (ChordCreate, ChordUpdate, ChordResponse), and API router (create + update endpoints)
+- Created Alembic migration `851f7f6990f1` with `server_default='0'` so existing rows get the default
+- Files changed:
+  - `backend/models/chord.py` - Added `starting_fret` mapped column
+  - `backend/schemas/chord.py` - Added `starting_fret` to all three schemas
+  - `backend/routers/chords.py` - Wired `starting_fret` into create and update handlers
+  - `backend/alembic/versions/851f7f6990f1_add_starting_fret_to_chords.py` - New migration
 - **Learnings for future iterations:**
-  - Tailwind CSS v4 uses `@import "tailwindcss"` instead of old `@tailwind base/components/utilities` directives
-  - Vite scaffold includes `.tsx` extension in imports (e.g., `import App from './App.tsx'`) which works but is non-standard; cleaned to extensionless imports
-  - `npm run dev` starts on port 5173 by default
+  - Alembic autogenerate template doesn't match project lint rules; needs manual cleanup (imports, string style, line length)
+  - Router maps fields explicitly — when adding a new model field, must update both create_chord and update_chord in the router
+  - Migration needs `server_default` for NOT NULL columns to handle existing rows
 ---
 
-## 2026-02-15 - US-002
-- Scaffolded FastAPI backend in `backend/` with uvicorn
-- Created project structure: `routers/`, `models/`, `schemas/`, `database/`, `auth/`
-- Configured SQLAlchemy with async support (asyncpg driver)
-- Initialized Alembic for migrations with async engine support
-- Configured Ruff for linting/formatting via `pyproject.toml`
-- Created `docker-compose.yml` at project root with PostgreSQL 16 service
-- Implemented health-check endpoint at `GET /api/health` returning 200
-- Files changed: `backend/` (entire scaffold), `docker-compose.yml`
+## 2026-02-16 - US-002
+- What was implemented: Added `startingFret` optional prop (default 0) to GuitarNeck component with full offset support
+- Changes:
+  - Fret labels display absolute fret numbers (`startingFret + visualFret`)
+  - Nut bar conditionally renders: thick bar when `startingFret === 0`, normal fret line otherwise
+  - Tap targets emit absolute fret numbers (`startingFret + visualPosition`)
+  - `hasMarker` checks against absolute fret values so markers render at correct visual position
+  - Fret 0 (open string) tap targets only render when `startingFret === 0`
+  - Out-of-range markers are naturally excluded since the rendering loop only covers the visible window
+- Files changed:
+  - `frontend/src/components/GuitarNeck.tsx` - Added `startingFret` prop, updated rendering logic
 - **Learnings for future iterations:**
-  - Ruff import sorting puts `alembic` before `sqlalchemy` (third-party alphabetical)
-  - macOS doesn't have `timeout` command; use background process + kill pattern for server testing
-  - FastAPI app uses `/api` prefix on routers to align with frontend proxy config
+  - No frontend test suite exists — quality checks are typecheck only (`npx tsc --noEmit`)
+  - The component iterates visual fret positions (1..fretCount) and computes absolute fret as `startingFret + visualFret`
+  - Markers outside the visible fret window don't need explicit filtering — the rendering loop only checks positions within the window
+  - When `startingFret > 0`, there's no "open string" concept — the fret-0 tap targets and nut bar are both hidden
 ---
 
-## 2026-02-15 - US-003
-- Defined SQLAlchemy models for User, Project, Song, Chord with UUID primary keys
-- Chord model stores `markers` as JSON column, has `position` integer for ordering
-- All models have created_at/updated_at timestamps with server defaults
-- Cascade deletes: User->Projects->Songs->Chords
-- Created manual Alembic migration (Docker/Postgres not running, so no autogenerate)
-- Verified migration generates valid SQL via `alembic upgrade head --sql`
-- Files changed: `backend/models/user.py`, `backend/models/project.py`, `backend/models/song.py`, `backend/models/chord.py`, `backend/models/__init__.py`, `backend/alembic/versions/8660a237d474_initial_schema.py`
+## 2026-02-16 - US-003
+- What was implemented: Added starting fret control to the chord editor UI in SongDetail.tsx
+- Changes:
+  - Added `starting_fret` field to the frontend `Chord` interface
+  - Added `editorStartingFret` state to manage the value in the editor
+  - Added increment (+) and decrement (−) buttons with min 0 / max 19 bounds
+  - Displays current starting fret value as "Starting fret: N" label
+  - Passes `startingFret` to the interactive `GuitarNeck` in the editor
+  - Includes `starting_fret` in both create (POST) and update (PUT) API calls
+  - Pre-populates starting fret when editing an existing chord
+  - Resets starting fret to 0 when opening a new chord or canceling
+- Files changed:
+  - `frontend/src/pages/SongDetail.tsx` - All UI and state changes for starting fret control
 - **Learnings for future iterations:**
-  - Alembic autogenerate requires a running database; use `alembic revision -m "name"` for manual migrations when DB is down
-  - Alembic auto-generated template uses old `typing.Union` and `typing.Sequence`; ruff requires `X | Y` and `collections.abc.Sequence`
-  - Test migration validity with `alembic upgrade head --sql` (offline mode) when no DB available
+  - All editor state (markers, name, starting fret) needs to be reset in both `openNewChordEditor` and `handleCancel`
+  - The editor modal is inline in SongDetail.tsx, not a separate component — all editor state lives as useState hooks in the SongDetail component
+  - Template browser also renders GuitarNeck previews — future stories may need to pass `startingFret` there too
 ---
 
-## 2026-02-15 - US-004
-- Implemented `POST /api/auth/register` endpoint with email/password validation
-- Created `auth/passwords.py` with bcrypt password hashing (using `bcrypt` directly, not `passlib`)
-- Created `schemas/user.py` with Pydantic UserCreate (email validation via EmailStr, password min 8 chars) and UserResponse
-- Created `routers/auth.py` with register endpoint: 201 on success, 409 on duplicate email, 422 on validation errors
-- Set up test infrastructure: pytest + pytest-asyncio + httpx + aiosqlite
-- Created `tests/conftest.py` with SQLite in-memory test DB and FastAPI dependency overrides
-- Created `tests/test_auth_register.py` with 6 tests covering success, duplicate email, invalid email, short password, missing fields, and password hash exclusion
-- Updated `requirements.txt`: replaced `passlib[bcrypt]` with `bcrypt`, added test deps
-- Updated `pyproject.toml` with pytest asyncio_mode config
-- Files changed: `backend/auth/passwords.py`, `backend/schemas/user.py`, `backend/routers/auth.py`, `backend/main.py`, `backend/requirements.txt`, `backend/pyproject.toml`, `backend/tests/conftest.py`, `backend/tests/test_auth_register.py`
+## 2026-02-16 - US-004
+- What was implemented: Added `starting_fret` field to chord templates and wired it through the template browser UI
+- Changes:
+  - Added `starting_fret: number` to `ChordTemplate` interface
+  - Added `starting_fret: 0` to all existing templates (A, Am, C, D, Dm, E, Em, F, G)
+  - Set `starting_fret: 2` for B and Bm templates (barre chord at 2nd fret)
+  - B and Bm marker fret values unchanged — they were already absolute fret positions
+  - Template selection handler now sets `editorStartingFret` from `template.starting_fret`
+  - Template preview GuitarNeck now receives `startingFret` prop for correct rendering
+- Files changed:
+  - `frontend/src/data/chordTemplates.ts` - Added `starting_fret` to interface and all template objects
+  - `frontend/src/pages/SongDetail.tsx` - Updated template selection handler and preview rendering
 - **Learnings for future iterations:**
-  - `passlib[bcrypt]` has compatibility issues with `bcrypt>=4` on Python 3.13; use `bcrypt` directly
-  - SQLite works as test DB substitute via `aiosqlite`; override `get_db` dependency in conftest
-  - pytest-asyncio `asyncio_mode = "auto"` avoids needing `@pytest.mark.asyncio` on every test (though we still use explicit markers for clarity)
+  - Template marker fret values are absolute (not relative to starting_fret) — the GuitarNeck component handles the offset internally
+  - The `ChordTemplate` interface doesn't use optional fields; all fields are required
+  - Template selection sets three pieces of editor state: markers, name, and starting fret
 ---
 
-## 2026-02-15 - US-005
-- Implemented `POST /api/auth/login` endpoint returning access + refresh JWT tokens
-- Created `backend/auth/tokens.py` with JWT token creation (access: 15 min, refresh: 7 days) and decoding
-- Added `UserLogin` and `TokenResponse` Pydantic schemas
-- Login returns 401 with identical error message for both bad email and bad password (security best practice)
-- 7 tests covering: success, token contents, token expiry, invalid password, nonexistent email, error message consistency
-- Files changed: `backend/auth/tokens.py` (new), `backend/schemas/user.py`, `backend/routers/auth.py`, `backend/tests/test_auth_login.py` (new)
+## 2026-02-16 - US-005
+- What was implemented: Passed `startingFret` from chord's `starting_fret` API field to the GuitarNeck component in the SortableChordCard mini preview
+- Files changed:
+  - `frontend/src/pages/SongDetail.tsx` - Added `startingFret={chord.starting_fret ?? 0}` to the card preview GuitarNeck
 - **Learnings for future iterations:**
-  - PyJWT is imported as `jwt`, not `pyjwt`; already in `requirements.txt`
-  - `decode_token` utility in `auth/tokens.py` can be reused for refresh endpoint and auth middleware
-  - Ruff enforces 100 char line limit; break long test function signatures across multiple lines
+  - The chord card preview is in the `SortableChordCard` component (line ~207 in SongDetail.tsx)
+  - This was a one-line change — the GuitarNeck component already handles all offset logic internally
+  - The `Chord` interface already had `starting_fret` from US-003, so no interface changes were needed
 ---
 
-## 2026-02-15 - US-006
-- Implemented `POST /api/auth/refresh` endpoint that accepts a refresh token and returns a new access token
-- Added `RefreshRequest` Pydantic schema for request body validation
-- Validates token type is "refresh" (rejects access tokens used as refresh tokens)
-- Returns 401 for expired, invalid, or wrong-type tokens
-- 6 tests covering: success, valid access token returned, expired token, invalid token, access token rejection, user ID preservation
-- Files changed: `backend/routers/auth.py`, `backend/schemas/user.py`, `backend/tests/test_auth_refresh.py` (new)
+## 2026-02-16 - US-006
+- What was implemented: Auto-adjust starting fret when opening an existing chord in the editor
+- Logic:
+  - If chord has no markers, use the saved `starting_fret`
+  - If saved `starting_fret` already makes all markers visible within the 5-fret window, use it
+  - Otherwise, calculate: `min(non-zero fret values) - 1`, clamped to 0, then verify max fret fits
+  - Visible range check accounts for fret 0 (open string) being visible only when `startingFret === 0`
+- Files changed:
+  - `frontend/src/pages/SongDetail.tsx` - Updated `openEditChordEditor` with auto-adjustment logic
 - **Learnings for future iterations:**
-  - Ruff requires `import jwt` to be sorted before `from fastapi` (stdlib-style sorting: third-party single-name imports before `from` imports)
-  - `decode_token` from `auth/tokens.py` raises `jwt.ExpiredSignatureError` for expired tokens and `jwt.InvalidTokenError` for all other invalid tokens
-  - Always check token `type` field to prevent access tokens from being used as refresh tokens
-- Auth dependency: `get_current_user` from `auth/dependencies.py`; use as FastAPI `Depends()` on protected routes
-- HTTPBearer in this FastAPI version returns 401 (not 403) for missing Authorization header
+  - The editor fretCount is hardcoded to 5 in multiple places — if this changes, the auto-adjust logic needs updating
+  - The visible fret range is `[startingFret + 1, startingFret + fretCount]` for fretted notes, plus fret 0 only when `startingFret === 0`
+  - Need to handle edge case where all markers are on fret 0 (open strings) — `Math.min(...[])` returns Infinity, so filter for `f > 0` and guard with `Number.isFinite`
 ---
 
-## 2026-02-15 - US-007
-- Created `backend/auth/dependencies.py` with `get_current_user` FastAPI dependency
-- Dependency extracts JWT from `Authorization: Bearer <token>` header using HTTPBearer
-- Validates token is not expired, is an access token (not refresh), and user exists in DB
-- Returns User ORM object or raises 401
-- Added `GET /api/auth/me` endpoint using the dependency (returns current user info)
-- 7 tests covering: valid token, missing token, expired token, invalid token, refresh token rejection, nonexistent user, password hash exclusion
-- Files changed: `backend/auth/dependencies.py` (new), `backend/routers/auth.py`, `backend/tests/test_auth_middleware.py` (new)
+## 2026-02-16 - US-007
+- What was implemented: Added out-of-range marker indicators directly in the GuitarNeck component
+- Logic:
+  - Computes visible fret range: `visibleMin` is 0 when `startingFret === 0`, otherwise `startingFret + 1`; `visibleMax` is `startingFret + fretCount`
+  - Filters markers below `visibleMin` and above `visibleMax`
+  - Renders text + arrow indicators in the SVG padding areas (above fretboard for "below" markers, below fretboard for "above" markers)
+  - Uses amber color (#d97706 / fill-amber-600) for visual distinction
+  - Shows count with singular/plural text (e.g., "1 marker below" / "2 markers above")
+- Files changed:
+  - `frontend/src/components/GuitarNeck.tsx` - Added out-of-range marker computation and indicator rendering
 - **Learnings for future iterations:**
-  - FastAPI's HTTPBearer returns 401 (not 403) for missing Authorization header in this version
-  - `get_current_user` dependency can be reused via `Depends(get_current_user)` on any protected route
-  - The `/api/auth/me` endpoint serves as both a useful API endpoint and a way to test the middleware
----
-
-## 2026-02-15 - US-008
-- Created auth context provider with `user`, `login`, `signup`, `logout` methods
-- Access token stored in memory (module-level variable), refresh token in localStorage
-- API client wrapper (`src/api/client.ts`) attaches Authorization header and auto-refreshes on 401
-- Route guards: `ProtectedRoute` redirects unauthenticated users to `/login`, `GuestRoute` redirects authenticated users to `/dashboard`
-- On app load, attempts to restore session by refreshing token and fetching user via `/api/auth/me`
-- Fixed Vite proxy config: removed path rewrite so `/api` prefix is preserved (backend expects `/api` prefix)
-- Files changed: `frontend/src/auth/authTypes.ts` (new), `frontend/src/auth/AuthContext.tsx` (new), `frontend/src/auth/useAuth.ts` (new), `frontend/src/auth/RouteGuards.tsx` (new), `frontend/src/api/client.ts` (new), `frontend/src/App.tsx`, `frontend/vite.config.ts`
-- **Learnings for future iterations:**
-  - ESLint `react-refresh/only-export-components` rule forbids exporting React context objects and components from the same file; split context/types into a plain `.ts` file
-  - Vite proxy was incorrectly rewriting `/api` prefix away; backend routes include `/api` prefix so proxy must NOT rewrite
-  - `useAuth` hook must be in its own file (not alongside `AuthProvider`) to satisfy react-refresh lint rule
----
-
-## 2026-02-15 - US-009
-- Implemented Login page with email/password form, client-side validation, error display, and auth context integration
-- Implemented Signup page with same pattern: email/password form, validation, error display, signup call, redirect to dashboard
-- Both pages link to each other (Login->Signup, Signup->Login)
-- Form validation: email regex check, password minimum 8 characters, errors shown inline
-- Successful auth redirects to `/dashboard` via `useNavigate`
-- Files changed: `frontend/src/pages/Login.tsx`, `frontend/src/pages/Signup.tsx`
-- **Learnings for future iterations:**
-  - Login page was already partially implemented as unstaged working changes from US-008; check git status for pre-existing work
-  - Login and Signup pages follow identical patterns; consider extracting a shared AuthForm component if more auth pages are needed
-  - No browser testing tools available; manual browser verification needed for UI stories
----
-
-## 2026-02-15 - US-010
-- Implemented Project CRUD API with 5 endpoints: GET /projects, POST /projects, GET /projects/:id, PUT /projects/:id, DELETE /projects/:id
-- All endpoints are auth-protected via `get_current_user` dependency
-- GET /projects returns only the authenticated user's projects, ordered by updated_at desc
-- GET/PUT/DELETE check ownership and return 403 if not owner, 404 if not found
-- DELETE returns 204 (no content) on success
-- Created Pydantic schemas: ProjectCreate, ProjectUpdate, ProjectResponse
-- 15 tests covering all CRUD operations and authorization checks (list, create, get, update, delete + not found, forbidden, unauthenticated, empty name)
-- Files changed: `backend/routers/projects.py` (new), `backend/schemas/project.py` (new), `backend/tests/test_projects.py` (new), `backend/main.py`
-- **Learnings for future iterations:**
-  - Ruff enforces 100 char line limit; break long chained SQLAlchemy queries across multiple lines
-  - Router pattern: create router in `routers/<resource>.py`, register in `main.py` with `prefix="/api/<resource>"`
-  - Auth fixtures pattern for tests: `registered_user` fixture creates user via API, `auth_headers` fixture creates access token from user ID
-  - Use `other_user`/`other_auth_headers` fixtures for authorization tests (403 checks)
-  - Cascade deletes from SQLAlchemy model definitions handle cleanup automatically
----
-
-## 2026-02-15 - US-011
-- Implemented Song CRUD API with 5 endpoints across two URL patterns:
-  - `GET /api/projects/:id/songs` - list songs in a project (validates project ownership)
-  - `POST /api/projects/:id/songs` - create a song in a project
-  - `GET /api/songs/:id` - get a single song (validates ownership through project)
-  - `PUT /api/songs/:id` - update song name
-  - `DELETE /api/songs/:id` - delete song (cascades to chords)
-- All endpoints validate ownership through the project's user_id
-- Created Pydantic schemas: SongCreate, SongUpdate, SongResponse
-- 18 tests covering all CRUD operations, authorization, and cascade delete
-- Files changed: `backend/routers/songs.py` (new), `backend/schemas/song.py` (new), `backend/tests/test_songs.py` (new), `backend/main.py`
-- **Learnings for future iterations:**
-  - Songs router uses mixed URL patterns (`/projects/:id/songs` and `/songs/:id`), so mount at `/api` prefix instead of `/api/songs`
-  - Helper functions `_get_owned_project` and `_get_owned_song` encapsulate ownership validation; reuse this pattern for chords
-  - Song ownership is validated indirectly through the project's user_id (song -> project -> user)
----
-
-## 2026-02-15 - US-012
-- Implemented Chord CRUD API with 6 endpoints:
-  - `GET /api/songs/:id/chords` - list chords in a song, ordered by position
-  - `POST /api/songs/:id/chords` - create a chord with name, markers, string_count, tuning
-  - `PUT /api/chords/:id` - update chord fields (partial update supported)
-  - `DELETE /api/chords/:id` - delete chord and re-normalize positions
-  - `PUT /api/songs/:id/chords/reorder` - reorder chords by providing ordered chord_ids
-- New chords auto-assigned next position in sequence using `coalesce(max(position), -1) + 1`
-- Delete re-normalizes positions: decrements positions of chords after the deleted one
-- Reorder validates that chord_ids exactly match all chords in the song (400 if mismatch)
-- Created Pydantic schemas: ChordCreate, ChordUpdate, ChordResponse, ReorderRequest, MarkerSchema
-- 20 tests covering all CRUD operations, authorization, position auto-assignment, position re-normalization, and reorder
-- Files changed: `backend/routers/chords.py` (new), `backend/schemas/chord.py` (new), `backend/tests/test_chords.py` (new), `backend/main.py`
-- **Learnings for future iterations:**
-  - Chords router follows same pattern as songs: mount at `/api` prefix for mixed URL patterns
-  - Chord ownership validated through chain: chord -> song -> project -> user (reuses `_get_owned_song` helper)
-  - `markers` field needs conversion from Pydantic models to dicts via `model_dump()` before storing as JSON
-  - `func.coalesce(func.max(Chord.position), -1)` handles empty song case for auto-position
-  - Reorder endpoint should validate exact set match (not subset) to prevent orphaned or missing chords
----
-
-## 2026-02-15 - US-013
-- Implemented project list page (Dashboard) with full CRUD functionality
-- Dashboard shows list of user's projects with name and last-updated date
-- "New Project" button opens inline form to create a project
-- Each project card links to `/projects/:id` (project detail page)
-- Empty state message when no projects exist
-- Inline rename: click "Rename" to edit project name in place
-- Delete with confirmation dialog inline on the card
-- Header with "My Projects" title and logout button
-- Error handling with dismissible error banner
-- Loading state while fetching projects
-- Files changed: `frontend/src/pages/Dashboard.tsx`
-- **Learnings for future iterations:**
-  - Dashboard page serves as the project list page at `/dashboard` route
-  - Project cards link to `/projects/:id` — future stories need to add this route to App.tsx
-  - `apiClient` from `src/api/client.ts` handles auth headers automatically; just call it with path and options
-  - No browser testing tools available; manual browser verification needed
----
-
-## 2026-02-15 - US-014
-- Implemented song list page (ProjectDetail) at `/projects/:id`
-- Project detail page fetches project info and songs in parallel
-- Shows list of songs with name and last-updated date
-- "New Song" button opens inline form to create a song
-- Each song card links to `/songs/:id` (chord sequence page, future story)
-- Empty state message when no songs exist
-- Inline rename and delete with confirmation dialog
-- Breadcrumb navigation: Dashboard / Project Name
-- Added `/projects/:id` route to App.tsx inside ProtectedRoute
-- Files changed: `frontend/src/pages/ProjectDetail.tsx` (new), `frontend/src/App.tsx`
-- **Learnings for future iterations:**
-  - ProjectDetail follows same patterns as Dashboard for CRUD operations
-  - Song API uses mixed URL patterns: `/api/projects/:id/songs` for list/create, `/api/songs/:id` for get/update/delete
-  - No browser testing tools available; manual browser verification needed
----
-
-## 2026-02-15 - US-015
-- Implemented GuitarNeck SVG-based React component in `frontend/src/components/GuitarNeck.tsx`
-- SVG renders guitar neck with configurable string count, tuning, and fret count (default 5)
-- Props: `stringCount` (default 6), `tuning` (default "EADGBE"), `markers`, `onMarkerToggle`, `fretCount` (default 5)
-- Fret numbers displayed on left side, string labels (tuning) displayed above nut
-- Nut (fret 0) rendered as a visually distinct thick dark bar
-- Tap/click on fret-string intersections triggers `onMarkerToggle` callback
-- Markers displayed as filled blue circles
-- Touch-friendly: transparent 44x44px tap targets over each intersection
-- Responsive: uses `viewBox` with `w-full max-w-lg` classes to scale to container
-- Created `frontend/src/components/` directory for reusable components
-- Files changed: `frontend/src/components/GuitarNeck.tsx` (new)
-- **Learnings for future iterations:**
-  - Reusable components go in `frontend/src/components/`, page components in `frontend/src/pages/`
-  - SVG `viewBox` + Tailwind `w-full` makes responsive SVGs that scale to container width
-  - Marker type `{string: number, fret: number}` matches the backend Chord `markers` JSON format
-  - Export `Marker` interface from GuitarNeck.tsx for use by other components
-  - No browser testing tools available; manual browser verification needed
----
-
-## 2026-02-15 - US-016
-- Implemented chord sequence view page (`SongDetail.tsx`) at `/songs/:id`
-- Song detail page fetches song info, then project info (for breadcrumbs), and chords in sequence
-- Chord cards display in a responsive grid (2 cols mobile, 3 sm, 4 md) with chord name and mini GuitarNeck preview
-- Mini neck preview uses `pointer-events-none` wrapper to disable tap interactions
-- "Add Chord" button creates an empty chord via POST to `/api/songs/:id/chords`
-- Empty state with message and add chord button when no chords exist
-- Breadcrumb navigation: Dashboard / Project Name / Song Name
-- Added `/songs/:id` route to App.tsx inside `<ProtectedRoute>`
-- Files changed: `frontend/src/pages/SongDetail.tsx` (new), `frontend/src/App.tsx`
-- **Learnings for future iterations:**
-  - Import `type Marker` from GuitarNeck component to type chord markers
-  - Song response includes `project_id` which can be used to fetch the parent project for breadcrumbs
-  - Use `pointer-events-none` CSS class on a wrapper div to make GuitarNeck non-interactive for preview mode
-  - Chord API returns chords ordered by `position` so no client-side sorting needed
-  - No browser testing tools available; manual browser verification needed
----
-
-## 2026-02-15 - US-017
-- Implemented chord editor modal in `SongDetail.tsx` for creating and editing chords
-- "Add Chord" button now opens a modal with GuitarNeck editor + name input instead of directly creating an empty chord
-- Clicking an existing chord card opens the editor pre-populated with that chord's markers and name
-- Save creates (POST) or updates (PUT) chord via API depending on whether editing existing chord
-- Cancel discards all changes and closes the modal
-- Chord cards changed from `<div>` to `<button>` for proper click handling and accessibility
-- Files changed: `frontend/src/pages/SongDetail.tsx`
-- **Learnings for future iterations:**
-  - Modal pattern: use `fixed inset-0 z-50` with `bg-black/50` backdrop for overlay modals
-  - Editor state pattern: track `editingChordId` (null = new, string = editing existing) alongside `editorMarkers` and `editorName`
-  - Marker toggle logic: check if marker exists at same string+fret, remove if exists, add if not
-  - No browser testing tools available; manual browser verification needed
----
-
-## 2026-02-15 - US-018
-- Implemented drag-and-drop chord reordering using `@dnd-kit/core` and `@dnd-kit/sortable`
-- Added `SortableChordCard` component with drag handle, move up/down buttons, and delete with confirmation
-- Reorder persists via `PUT /songs/:id/chords/reorder` API call
-- Move up/down buttons disabled at boundaries (first/last position)
-- Delete shows inline confirm/cancel UI before executing
-- Added `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` to package.json
-- Files changed: `frontend/src/pages/SongDetail.tsx`, `frontend/package.json`, `frontend/package-lock.json`
-- **Learnings for future iterations:**
-  - `@dnd-kit` v6+ uses `PointerSensor` with `activationConstraint: { distance: 8 }` to prevent accidental drags
-  - `useSortable` hook provides `attributes`, `listeners`, `setNodeRef`, `transform`, `transition` for sortable items
-  - Separate drag handle from card content: spread `{...attributes} {...listeners}` on the handle element only
-  - `arrayMove` from `@dnd-kit/sortable` for optimistic UI reorder before API call
-  - No browser testing tools available; manual browser verification needed
----
-
-## 2026-02-15 - US-019
-- Created TypeScript data file with 11 common chord templates: A, Am, B, Bm, C, D, Dm, E, Em, F, G
-- B and Bm include barre chord shapes (markers on fret 2 across multiple strings)
-- F includes barre chord shape (markers on fret 1 across all strings)
-- Each template has: name, markers array ({string, fret}), string_count, tuning
-- Exported `ChordTemplate` interface and `chordTemplates` array
-- Files changed: `frontend/src/data/chordTemplates.ts` (new)
-- **Learnings for future iterations:**
-  - Data files go in `frontend/src/data/` directory
-  - Marker format matches backend Chord model: `{string: number, fret: number}` where string 0 = low E, string 5 = high E
-  - Standard guitar tuning: EADGBE (strings 0-5 = low to high)
----
-
-## 2026-02-15 - US-020
-- Added "Browse Templates" button to chord editor modal in `SongDetail.tsx`
-- Template browser shows searchable grid of chord templates with mini GuitarNeck previews
-- Search filters templates by name (case-insensitive)
-- Selecting a template populates the editor's markers and name, then closes the browser
-- User can modify template markers freely before saving (template is just a starting point)
-- Added `max-h-[90vh] overflow-y-auto` to modal to handle template browser overflow
-- Files changed: `frontend/src/pages/SongDetail.tsx`
-- **Learnings for future iterations:**
-  - Template browser pattern: toggle panel inside existing modal with search filter + grid of selectable cards
-  - Import `chordTemplates` from `src/data/chordTemplates.ts` for template data
-  - Use `pointer-events-none` wrapper on preview `GuitarNeck` components to disable interaction
-  - Add `max-h-[90vh] overflow-y-auto` to modals that may grow tall with dynamic content
-  - No browser testing tools available; manual browser verification needed
----
-
-## 2026-02-15 - US-021
-- Created shared `AppLayout` component (`frontend/src/components/AppLayout.tsx`) with responsive header and hamburger menu
-- Hamburger menu on mobile (below `sm` breakpoint) with dropdown for "Projects" link and "Log out" button
-- Desktop nav shows links inline in the header
-- All protected pages (Dashboard, ProjectDetail, SongDetail) now use `AppLayout` instead of duplicating header/nav
-- Made all forms responsive: stack vertically on mobile (`flex-col`), horizontal on desktop (`sm:flex-row`)
-- Delete confirmations and edit forms stack vertically on mobile
-- Project/song cards use `min-w-0` + `truncate` to prevent text overflow on narrow screens
-- Chord grid: single column on mobile, 2 cols on `sm`, 3 cols on `lg` (was 3 on `md`)
-- Chord editor modal slides up from bottom on mobile (`items-end` + `rounded-t-lg`), centered on desktop
-- Clickable backdrop overlay on modal for easy dismissal
-- Home page made responsive with mobile padding and responsive text size
-- Empty states use responsive padding (`p-8 sm:p-12`)
-- Button padding reduced on mobile for action buttons (`px-2 sm:px-3`)
-- Added `overflow-x: hidden` to `html, body` in `index.css` to prevent horizontal scrolling
-- Updated page title from "frontend" to "Chord Tracker" in `index.html`
-- GuitarNeck already uses `viewBox` + `w-full` making it responsive down to 375px
-- Touch targets already at 44x44px in GuitarNeck component
-- Files changed: `frontend/src/components/AppLayout.tsx` (new), `frontend/src/pages/Dashboard.tsx`, `frontend/src/pages/ProjectDetail.tsx`, `frontend/src/pages/SongDetail.tsx`, `frontend/src/pages/Home.tsx`, `frontend/src/index.css`, `frontend/index.html`
-- **Learnings for future iterations:**
-  - `AppLayout` component accepts `title`, `breadcrumbs`, and `children` props for consistent page structure
-  - Mobile modal pattern: use `items-end` + `rounded-t-lg` for bottom-sheet style on mobile, `sm:items-center` + `sm:rounded-lg` for centered on desktop
-  - Use `min-w-0` on flex children containing truncatable text to prevent flex items from overflowing
-  - `overflow-x: hidden` on html/body as safety net against any horizontal scroll
-  - No browser testing tools available; manual browser verification needed
+  - Indicators are built into GuitarNeck itself, so they automatically appear everywhere the component is used (editor, card previews, template previews) — no per-usage wiring needed
+  - The SVG padding areas (top: 40px, bottom: 20px) provide enough space for small indicator text without changing the viewBox
+  - The visible range depends on `startingFret`: when 0, fret 0 (open string) is visible; otherwise the range starts at `startingFret + 1`
 ---

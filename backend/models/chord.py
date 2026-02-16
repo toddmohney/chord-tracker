@@ -17,6 +17,7 @@ class Chord(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     string_count: Mapped[int] = mapped_column(Integer, nullable=False, default=6)
     tuning: Mapped[str] = mapped_column(String(50), nullable=False, default="EADGBE")
+    starting_fret: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     song_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("songs.id", ondelete="CASCADE"),

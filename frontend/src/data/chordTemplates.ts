@@ -3,10 +3,11 @@ export interface ChordTemplate {
   markers: { string: number; fret: number }[]
   string_count: number
   tuning: string
+  starting_fret: number
 }
 
 // Standard 6-string guitar tuning (EADGBE)
-// Strings numbered 0 (low E) to 5 (high E), frets 1-5
+// Strings numbered 0 (low E) to 5 (high E), frets are absolute positions
 export const chordTemplates: ChordTemplate[] = [
   {
     name: 'A',
@@ -17,6 +18,7 @@ export const chordTemplates: ChordTemplate[] = [
     ],
     string_count: 6,
     tuning: 'EADGBE',
+    starting_fret: 0,
   },
   {
     name: 'Am',
@@ -27,6 +29,7 @@ export const chordTemplates: ChordTemplate[] = [
     ],
     string_count: 6,
     tuning: 'EADGBE',
+    starting_fret: 0,
   },
   {
     name: 'B',
@@ -40,6 +43,7 @@ export const chordTemplates: ChordTemplate[] = [
     ],
     string_count: 6,
     tuning: 'EADGBE',
+    starting_fret: 2,
   },
   {
     name: 'Bm',
@@ -53,6 +57,7 @@ export const chordTemplates: ChordTemplate[] = [
     ],
     string_count: 6,
     tuning: 'EADGBE',
+    starting_fret: 2,
   },
   {
     name: 'C',
@@ -63,6 +68,7 @@ export const chordTemplates: ChordTemplate[] = [
     ],
     string_count: 6,
     tuning: 'EADGBE',
+    starting_fret: 0,
   },
   {
     name: 'D',
@@ -73,6 +79,7 @@ export const chordTemplates: ChordTemplate[] = [
     ],
     string_count: 6,
     tuning: 'EADGBE',
+    starting_fret: 0,
   },
   {
     name: 'Dm',
@@ -83,6 +90,7 @@ export const chordTemplates: ChordTemplate[] = [
     ],
     string_count: 6,
     tuning: 'EADGBE',
+    starting_fret: 0,
   },
   {
     name: 'E',
@@ -93,6 +101,7 @@ export const chordTemplates: ChordTemplate[] = [
     ],
     string_count: 6,
     tuning: 'EADGBE',
+    starting_fret: 0,
   },
   {
     name: 'Em',
@@ -102,6 +111,7 @@ export const chordTemplates: ChordTemplate[] = [
     ],
     string_count: 6,
     tuning: 'EADGBE',
+    starting_fret: 0,
   },
   {
     name: 'F',
@@ -115,6 +125,7 @@ export const chordTemplates: ChordTemplate[] = [
     ],
     string_count: 6,
     tuning: 'EADGBE',
+    starting_fret: 0,
   },
   {
     name: 'G',
@@ -126,5 +137,6 @@ export const chordTemplates: ChordTemplate[] = [
     ],
     string_count: 6,
     tuning: 'EADGBE',
+    starting_fret: 0,
   },
 ]
