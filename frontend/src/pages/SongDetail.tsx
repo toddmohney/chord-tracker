@@ -21,7 +21,11 @@ import { apiClient } from '../api/client'
 import AppLayout from '../components/AppLayout'
 import GuitarNeck, { type Marker } from '../components/GuitarNeck'
 import ChordStaff from '../components/ChordStaff'
-import { buildDefaultMeasures, type SequenceMeasure } from '../types/sequence'
+import {
+  buildDefaultMeasures,
+  type SequenceApiResponse,
+  type SequenceMeasure,
+} from '../types/sequence'
 import { chordTemplates } from '../data/chordTemplates'
 
 interface Song {
@@ -240,12 +244,20 @@ export default function SongDetail() {
   const [templateSearch, setTemplateSearch] = useState('')
 
   // Sequence state (initialized with 4 empty measures in 4/4)
-  const [sequenceNumerator] = useState(4)
-  const [sequenceDenominator] = useState(4)
-  const [measuresPerLine] = useState(4)
-  const [sequenceMeasures] = useState<SequenceMeasure[]>(
+  const [sequenceNumerator, setSequenceNumerator] = useState(4)
+  const [sequenceDenominator, setSequenceDenominator] = useState(4)
+  const [measuresPerLine, setMeasuresPerLine] = useState(4)
+  const [sequenceMeasures, setSequenceMeasures] = useState<SequenceMeasure[]>(
     () => buildDefaultMeasures(4, 4),
   )
+  const [sequenceExists, setSequenceExists] = useState(false)
+  const [sequenceSaving, setSequenceSaving] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  function showToast(message: string, type: 'success' | 'error') {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -269,6 +281,37 @@ export default function SongDetail() {
     setChords(data)
   }, [id])
 
+  const fetchSequence = useCallback(async () => {
+    const response = await apiClient(`/api/songs/${id}/sequence`)
+    if (response.status === 404) {
+      // No sequence yet — keep defaults
+      return
+    }
+    if (!response.ok) throw new Error('Failed to fetch sequence')
+    const data: SequenceApiResponse = await response.json()
+    setSequenceNumerator(data.time_signature_numerator)
+    setSequenceDenominator(data.time_signature_denominator)
+    setMeasuresPerLine(data.measures_per_line)
+    setSequenceExists(true)
+    setSequenceMeasures(
+      data.measures
+        .sort((a, b) => a.position - b.position)
+        .map((m) => ({
+          id: m.id,
+          position: m.position,
+          repeat_start: m.repeat_start,
+          repeat_end: m.repeat_end,
+          ending_number: m.ending_number,
+          beats: m.beats
+            .sort((a, b) => a.beat_position - b.beat_position)
+            .map((b) => ({
+              beat_position: b.beat_position,
+              chord_id: b.chord_id,
+            })),
+        })),
+    )
+  }, [id])
+
   useEffect(() => {
     async function load() {
       try {
@@ -281,6 +324,7 @@ export default function SongDetail() {
           setProject(projectData)
         }
         await fetchChords()
+        await fetchSequence()
       } catch {
         setError('Failed to load song')
       } finally {
@@ -288,7 +332,59 @@ export default function SongDetail() {
       }
     }
     load()
-  }, [fetchSong, fetchChords])
+  }, [fetchSong, fetchChords, fetchSequence])
+
+  async function handleSaveSequence() {
+    setSequenceSaving(true)
+    try {
+      const payload = {
+        time_signature_numerator: sequenceNumerator,
+        time_signature_denominator: sequenceDenominator,
+        measures_per_line: measuresPerLine,
+        measures: sequenceMeasures.map((m, index) => ({
+          position: index,
+          repeat_start: m.repeat_start,
+          repeat_end: m.repeat_end,
+          ending_number: m.ending_number,
+          beats: m.beats.map((b) => ({
+            beat_position: b.beat_position,
+            chord_id: b.chord_id,
+          })),
+        })),
+      }
+
+      let response = await apiClient(`/api/songs/${id}/sequence`, {
+        method: 'PUT',
+        body: payload,
+      })
+
+      if (response.status === 404) {
+        // Sequence doesn't exist yet — create it first
+        const createResponse = await apiClient(`/api/songs/${id}/sequence`, {
+          method: 'POST',
+          body: {
+            time_signature_numerator: sequenceNumerator,
+            time_signature_denominator: sequenceDenominator,
+            measures_per_line: measuresPerLine,
+          },
+        })
+        if (!createResponse.ok) throw new Error('Failed to create sequence')
+        setSequenceExists(true)
+        response = await apiClient(`/api/songs/${id}/sequence`, {
+          method: 'PUT',
+          body: payload,
+        })
+      }
+
+      if (!response.ok) throw new Error('Failed to save sequence')
+      if (!sequenceExists) setSequenceExists(true)
+      showToast('Sequence saved', 'success')
+    } catch {
+      showToast('Failed to save sequence', 'error')
+    } finally {
+      setSequenceSaving(false)
+    }
+  }
 
   async function persistReorder(reorderedChords: Chord[]) {
     const response = await apiClient(`/api/songs/${id}/chords/reorder`, {
@@ -665,9 +761,18 @@ export default function SongDetail() {
 
       {/* Chord Sequence Section */}
       <div className="mt-8 border-t border-gray-200 pt-6">
-        <h2 className="mb-4 text-base font-semibold text-gray-900">
-          Chord Sequence
-        </h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-900">
+            Chord Sequence
+          </h2>
+          <button
+            onClick={handleSaveSequence}
+            disabled={sequenceSaving}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {sequenceSaving ? 'Saving...' : 'Save Sequence'}
+          </button>
+        </div>
         <ChordStaff
           numerator={sequenceNumerator}
           denominator={sequenceDenominator}
@@ -675,6 +780,17 @@ export default function SongDetail() {
           measures={sequenceMeasures}
         />
       </div>
+
+      {/* Toast notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-4 right-4 z-50 rounded-md px-4 py-2 text-sm font-medium text-white shadow-lg ${
+            toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
     </AppLayout>
   )
 }
