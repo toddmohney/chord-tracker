@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import type { SequenceMeasure, SequenceBeat } from '../types/sequence'
 
@@ -7,6 +8,7 @@ export interface ChordStaffProps {
   measuresPerLine: number
   measures: SequenceMeasure[]
   chordMap: Record<string, string>
+  onRemoveBeat: (measureId: string, beatPosition: number) => void
 }
 
 function TimeSignature({ numerator, denominator }: { numerator: number; denominator: number }) {
@@ -22,11 +24,14 @@ function BeatSlot({
   beat,
   measureId,
   chordMap,
+  onRemoveBeat,
 }: {
   beat: SequenceBeat
   measureId: string
   chordMap: Record<string, string>
+  onRemoveBeat: (measureId: string, beatPosition: number) => void
 }) {
+  const [showMenu, setShowMenu] = useState(false)
   const { setNodeRef, isOver } = useDroppable({
     id: `beat|${measureId}|${beat.beat_position}`,
     data: { type: 'beat', measureId, beatPosition: beat.beat_position },
@@ -35,22 +40,42 @@ function BeatSlot({
   const chordName = beat.chord_id ? (chordMap[beat.chord_id] ?? 'Untitled') : null
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`flex h-12 w-full items-center justify-center rounded border text-xs transition-colors ${
-        isOver
-          ? 'border-blue-400 bg-blue-50'
-          : beat.chord_id
-            ? 'border-gray-300 bg-white'
-            : 'border-dashed border-gray-300 bg-white text-gray-400'
-      }`}
-      aria-label={`Beat ${beat.beat_position}`}
-    >
-      {chordName === null ? (
-        <span className="select-none opacity-50">—</span>
-      ) : (
-        <span className="font-medium text-gray-800">{chordName}</span>
+    <div className="relative flex-1">
+      {showMenu && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+          <div className="absolute bottom-full left-1/2 z-20 mb-1 -translate-x-1/2 rounded border border-gray-200 bg-white shadow-md">
+            <button
+              type="button"
+              onClick={() => {
+                onRemoveBeat(measureId, beat.beat_position)
+                setShowMenu(false)
+              }}
+              className="block w-full whitespace-nowrap px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+            >
+              Remove
+            </button>
+          </div>
+        </>
       )}
+      <div
+        ref={setNodeRef}
+        onClick={() => { if (beat.chord_id) setShowMenu((v) => !v) }}
+        className={`flex h-12 w-full items-center justify-center rounded border text-xs transition-colors ${
+          isOver
+            ? 'border-blue-400 bg-blue-50'
+            : beat.chord_id
+              ? 'cursor-pointer border-gray-300 bg-white hover:border-gray-400'
+              : 'border-dashed border-gray-300 bg-white text-gray-400'
+        }`}
+        aria-label={`Beat ${beat.beat_position}`}
+      >
+        {chordName === null ? (
+          <span className="select-none opacity-50">—</span>
+        ) : (
+          <span className="font-medium text-gray-800">{chordName}</span>
+        )}
+      </div>
     </div>
   )
 }
@@ -66,9 +91,11 @@ function Barline({ bold = false }: { bold?: boolean }) {
 function Measure({
   measure,
   chordMap,
+  onRemoveBeat,
 }: {
   measure: SequenceMeasure
   chordMap: Record<string, string>
+  onRemoveBeat: (measureId: string, beatPosition: number) => void
 }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1 px-1">
@@ -81,7 +108,13 @@ function Measure({
       {/* Beat slots */}
       <div className="flex gap-1">
         {measure.beats.map((beat) => (
-          <BeatSlot key={beat.beat_position} beat={beat} measureId={measure.id} chordMap={chordMap} />
+          <BeatSlot
+            key={beat.beat_position}
+            beat={beat}
+            measureId={measure.id}
+            chordMap={chordMap}
+            onRemoveBeat={onRemoveBeat}
+          />
         ))}
       </div>
     </div>
@@ -94,6 +127,7 @@ export default function ChordStaff({
   measuresPerLine,
   measures,
   chordMap,
+  onRemoveBeat,
 }: ChordStaffProps) {
   // Split measures into lines
   const lines: SequenceMeasure[][] = []
@@ -118,7 +152,7 @@ export default function ChordStaff({
 
           {lineMeasures.map((measure, measureIndex) => (
             <div key={measure.id} className="flex min-w-0 flex-1 items-stretch">
-              <Measure measure={measure} chordMap={chordMap} />
+              <Measure measure={measure} chordMap={chordMap} onRemoveBeat={onRemoveBeat} />
               {/* Barline after each measure */}
               {measure.repeat_end ? (
                 <>

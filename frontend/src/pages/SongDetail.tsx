@@ -386,6 +386,20 @@ export default function SongDetail() {
     }
   }
 
+  function handleRemoveBeat(measureId: string, beatPosition: number) {
+    setSequenceMeasures((prev) =>
+      prev.map((m) => {
+        if (m.id !== measureId) return m
+        return {
+          ...m,
+          beats: m.beats.map((b) =>
+            b.beat_position === beatPosition ? { ...b, chord_id: null } : b,
+          ),
+        }
+      }),
+    )
+  }
+
   async function persistReorder(reorderedChords: Chord[]) {
     const response = await apiClient(`/api/songs/${id}/chords/reorder`, {
       method: 'PUT',
@@ -801,6 +815,7 @@ export default function SongDetail() {
             measuresPerLine={measuresPerLine}
             measures={sequenceMeasures}
             chordMap={Object.fromEntries(chords.map((c) => [c.id, c.name ?? 'Untitled']))}
+            onRemoveBeat={handleRemoveBeat}
           />
         </div>
       </DndContext>
