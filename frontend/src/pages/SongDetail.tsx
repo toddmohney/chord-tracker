@@ -252,6 +252,7 @@ export default function SongDetail() {
   )
   const [sequenceExists, setSequenceExists] = useState(false)
   const [sequenceSaving, setSequenceSaving] = useState(false)
+  const [pendingNumerator, setPendingNumerator] = useState<number | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   function showToast(message: string, type: 'success' | 'error') {
@@ -423,6 +424,38 @@ export default function SongDetail() {
         }
       }),
     )
+  }
+
+  function applyNumeratorChange(newNumerator: number) {
+    setSequenceNumerator(newNumerator)
+    setSequenceMeasures((prev) =>
+      prev.map((m) => {
+        const trimmed = m.beats.filter((b) => b.beat_position <= newNumerator)
+        const existing = new Set(trimmed.map((b) => b.beat_position))
+        const extended = [...trimmed]
+        for (let pos = 1; pos <= newNumerator; pos++) {
+          if (!existing.has(pos)) extended.push({ beat_position: pos, chord_id: null })
+        }
+        extended.sort((a, b) => a.beat_position - b.beat_position)
+        return { ...m, beats: extended }
+      }),
+    )
+    setPendingNumerator(null)
+  }
+
+  function handleNumeratorChange(newNumerator: number) {
+    const wouldLoseData = sequenceMeasures.some((m) =>
+      m.beats.some((b) => b.beat_position > newNumerator && b.chord_id !== null),
+    )
+    if (wouldLoseData) {
+      setPendingNumerator(newNumerator)
+    } else {
+      applyNumeratorChange(newNumerator)
+    }
+  }
+
+  function handleDenominatorChange(newDenominator: number) {
+    setSequenceDenominator(newDenominator)
   }
 
   async function persistReorder(reorderedChords: Chord[]) {
@@ -842,6 +875,54 @@ export default function SongDetail() {
               </button>
             </div>
           </div>
+          {/* Time signature selector */}
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Time Signature:</span>
+            <select
+              value={sequenceNumerator}
+              onChange={(e) => handleNumeratorChange(Number(e.target.value))}
+              className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              {Array.from({ length: 11 }, (_, i) => i + 2).map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span className="text-sm font-medium text-gray-500">/</span>
+            <select
+              value={sequenceDenominator}
+              onChange={(e) => handleDenominatorChange(Number(e.target.value))}
+              className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              {[2, 4, 8, 16].map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+          {/* Confirmation dialog when reducing numerator would lose beat data */}
+          {pendingNumerator !== null && (
+            <div className="mb-4 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+              <p className="mb-2">
+                Changing to {pendingNumerator}/{sequenceDenominator} will remove beats beyond position{' '}
+                {pendingNumerator}. Any chords in those beats will be lost.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyNumeratorChange(pendingNumerator)}
+                  className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingNumerator(null)}
+                  className="rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           <ChordStaff
             numerator={sequenceNumerator}
             denominator={sequenceDenominator}
