@@ -1,3 +1,29 @@
+## 2026-02-21 - US-010
+- What was implemented: Numbered ending annotations for each measure. Each measure footer now shows three small toggle buttons: "—" (none), "1.", "2.". Clicking an active ending number deselects it (sets to null). The bracket display above the measure was already implemented in prior iterations. `handleSetEndingNumber` added to `SongDetail.tsx` and wired to `ChordStaff` via the new `onSetEndingNumber` prop. Ending number state is persisted via the existing Save Sequence mechanism (already included `ending_number` in payload).
+- Files changed:
+  - `frontend/src/components/ChordStaff.tsx` — added `onSetEndingNumber` to `ChordStaffProps` and `Measure` props; added ending number selector buttons (None/1./2.) in `Measure` footer between repeat toggles
+  - `frontend/src/pages/SongDetail.tsx` — added `handleSetEndingNumber` function; passed `onSetEndingNumber` to `ChordStaff`
+- **Learnings for future iterations:**
+  - `ending_number` was already wired into save payload and bracket display from earlier stories — only the setter UI was missing
+  - Toggling logic: clicking the active value sets it to null (deselects); clicking an inactive value sets it (replaces any existing)
+  - The `([null, 1, 2] as (number | null)[]).map(...)` pattern works well for typed nullable selectors in TypeScript
+  - Browser verification not done (no browser tool) — manual check recommended
+---
+
+## 2026-02-21 - US-009
+- What was implemented: Repeat barline annotations for chord staff. Each measure has `|:` (repeat start) and `:|` (repeat end) toggle buttons below the beat slots. Active toggles render as filled dark buttons. The staff rendering displays proper `|:` and `:|` barlines (with double bar lines and dots). Combined `:|:` barlines render when adjacent measures have repeat-end + repeat-start respectively. State is persisted via the existing Save Sequence mechanism.
+- Files changed:
+  - `frontend/src/components/ChordStaff.tsx` — added `onToggleRepeatStart`/`onToggleRepeatEnd` props; added `RepeatDots` component; added toggle buttons in `Measure` footer; updated barline logic in `ChordStaff` to render `|:`, `:|`, and `:|:` barlines
+  - `frontend/src/pages/SongDetail.tsx` — added `handleToggleRepeatStart` and `handleToggleRepeatEnd` handlers; passed them to `ChordStaff`
+- **Learnings for future iterations:**
+  - `repeat_start` and `repeat_end` fields already exist in `SequenceMeasure` type and backend — no schema changes needed
+  - Barline rendering logic: opening barline of each line checks `lineMeasures[0]?.repeat_start`; barline after each measure checks `measure.repeat_end` and `nextMeasure?.repeat_start`
+  - `RepeatDots` uses `self-stretch flex-col justify-center` to vertically center dots in the flex row
+  - Standard `|:` = thin+bold+dots; `:|` = dots+bold+thin; `:|:` = dots+bold+thin+bold+dots
+  - Toggle button pattern: `font-mono font-bold` for musical symbol rendering; active state uses `bg-gray-700 text-white`
+  - Browser verification not done (no browser tool) — manual check recommended
+---
+
 ## Codebase Patterns
 - When adding a new drop target type alongside existing sortable DnD, use a single DndContext wrapping both sections; distinguish drops via `over.data.current?.type` (useDroppable `data` prop)
 - Beat slot droppable IDs use `|` as separator (e.g., `beat|${measureId}|${beatPosition}`) to avoid UUID hyphen collisions when parsing
