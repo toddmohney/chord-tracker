@@ -49,6 +49,19 @@ Started: Sat Feb 21 10:55:30 EST 2026
   - When deleting with `db.delete(sequence)` and ORM cascade, load the full relationship tree with `selectinload` first so SQLAlchemy knows what to cascade-delete in SQLite
 ---
 
+## 2026-02-21 - US-004
+- What was implemented: On page load, fetches existing sequence via `GET /api/songs/{id}/sequence`; if 404 initializes with 4 empty measures in 4/4. "Save Sequence" button sends full state to `PUT /api/songs/{id}/sequence`; if 404 (no sequence yet) first POSTs to create then PUTs. Success/error toasts auto-dismiss after 3 seconds.
+- Files changed:
+  - `frontend/src/types/sequence.ts` (added `SequenceBeatApiResponse`, `SequenceMeasureApiResponse`, `SequenceApiResponse` types)
+  - `frontend/src/pages/SongDetail.tsx` (mutable sequence state, `fetchSequence` callback, `handleSaveSequence`, toast state, Save Sequence button, toast UI)
+- **Learnings for future iterations:**
+  - Toast pattern: `useState<{ message: string; type: 'success' | 'error' } | null>(null)` + `setTimeout(() => setToast(null), 3000)` — simple inline approach without a library
+  - PUT before POST pattern: try PUT first, if 404 then POST to create + PUT again — avoids tracking `sequenceExists` before the first load
+  - Sort API response arrays by position/beat_position before mapping — backend may not guarantee order
+  - TypeScript strict mode: adding setters to useState is fine as long as all setters are actually used (e.g., in fetchSequence callbacks)
+  - `SequenceApiResponse` placed in `src/types/sequence.ts` (not the component file) to avoid ESLint `only-export-components` issues
+---
+
 ## 2026-02-21 - US-003
 - What was implemented: `ChordStaff` component renders a music-staff-style display with time signature, barlines, multiple lines of measures, and empty beat slots (dashed outlines). Added "Chord Sequence" section below chord list on song detail page.
 - Files changed:
