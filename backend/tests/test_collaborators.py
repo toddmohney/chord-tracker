@@ -170,6 +170,202 @@ async def test_invite_collaborator_409_duplicate_pending(
     assert response.status_code == 409
 
 
+@pytest.fixture
+async def invitation(
+    client: AsyncClient, owner_headers: dict, project: dict, invitee: dict
+) -> dict:
+    response = await client.post(
+        f"/api/projects/{project['id']}/collaborators",
+        json={"identifier": invitee["email"], "role": "editor"},
+        headers=owner_headers,
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+# --- PATCH /collaborators/{collaborator_id} ---
+
+
+@pytest.mark.asyncio
+async def test_update_collaborator_status_accepted(
+    client: AsyncClient, invitee_headers: dict, invitation: dict
+) -> None:
+    """Invitee can accept their invitation."""
+    response = await client.patch(
+        f"/api/collaborators/{invitation['id']}",
+        json={"status": "accepted"},
+        headers=invitee_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "accepted"
+
+
+@pytest.mark.asyncio
+async def test_update_collaborator_status_declined(
+    client: AsyncClient, invitee_headers: dict, invitation: dict
+) -> None:
+    """Invitee can decline their invitation."""
+    response = await client.patch(
+        f"/api/collaborators/{invitation['id']}",
+        json={"status": "declined"},
+        headers=invitee_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "declined"
+
+
+@pytest.mark.asyncio
+async def test_update_collaborator_status_403_non_invitee(
+    client: AsyncClient, owner_headers: dict, invitation: dict
+) -> None:
+    """Non-invitee cannot change invitation status."""
+    response = await client.patch(
+        f"/api/collaborators/{invitation['id']}",
+        json={"status": "accepted"},
+        headers=owner_headers,
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_update_collaborator_status_400_pending(
+    client: AsyncClient, invitee_headers: dict, invitation: dict
+) -> None:
+    """Cannot set status back to pending."""
+    response = await client.patch(
+        f"/api/collaborators/{invitation['id']}",
+        json={"status": "pending"},
+        headers=invitee_headers,
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_update_collaborator_status_404_not_found(
+    client: AsyncClient, invitee_headers: dict
+) -> None:
+    """Returns 404 when collaborator record does not exist."""
+    fake_id = uuid.uuid4()
+    response = await client.patch(
+        f"/api/collaborators/{fake_id}",
+        json={"status": "accepted"},
+        headers=invitee_headers,
+    )
+    assert response.status_code == 404
+
+
+# --- GET /projects/{project_id}/collaborators ---
+
+
+@pytest.mark.asyncio
+async def test_list_collaborators_owner(
+    client: AsyncClient, owner_headers: dict, project: dict, invitation: dict
+) -> None:
+    """Owner can list all collaborators."""
+    response = await client.get(
+        f"/api/projects/{project['id']}/collaborators",
+        headers=owner_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["id"] == invitation["id"]
+
+
+@pytest.mark.asyncio
+async def test_list_collaborators_admin(
+    client: AsyncClient,
+    owner_headers: dict,
+    project: dict,
+    invitee: dict,
+    invitee_headers: dict,
+    third_user: dict,
+    third_headers: dict,
+) -> None:
+    """Accepted admin collaborator can list collaborators."""
+    # Invite invitee as admin
+    invite_resp = await client.post(
+        f"/api/projects/{project['id']}/collaborators",
+        json={"identifier": invitee["email"], "role": "admin"},
+        headers=owner_headers,
+    )
+    collaborator_id = invite_resp.json()["id"]
+
+    # Accept the invitation
+    await client.patch(
+        f"/api/collaborators/{collaborator_id}",
+        json={"status": "accepted"},
+        headers=invitee_headers,
+    )
+
+    # Admin can now list
+    response = await client.get(
+        f"/api/projects/{project['id']}/collaborators",
+        headers=invitee_headers,
+    )
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_list_collaborators_403_non_owner(
+    client: AsyncClient, third_headers: dict, project: dict, invitation: dict
+) -> None:
+    """Non-owner/non-admin cannot list collaborators."""
+    response = await client.get(
+        f"/api/projects/{project['id']}/collaborators",
+        headers=third_headers,
+    )
+    assert response.status_code == 403
+
+
+# --- DELETE /projects/{project_id}/collaborators/{collaborator_id} ---
+
+
+@pytest.mark.asyncio
+async def test_remove_collaborator_success(
+    client: AsyncClient, owner_headers: dict, project: dict, invitation: dict
+) -> None:
+    """Owner can remove a collaborator."""
+    response = await client.delete(
+        f"/api/projects/{project['id']}/collaborators/{invitation['id']}",
+        headers=owner_headers,
+    )
+    assert response.status_code == 204
+
+    # Confirm it's gone
+    list_resp = await client.get(
+        f"/api/projects/{project['id']}/collaborators",
+        headers=owner_headers,
+    )
+    assert list_resp.json() == []
+
+
+@pytest.mark.asyncio
+async def test_remove_collaborator_403_non_owner(
+    client: AsyncClient, third_headers: dict, project: dict, invitation: dict
+) -> None:
+    """Non-owner cannot remove a collaborator."""
+    response = await client.delete(
+        f"/api/projects/{project['id']}/collaborators/{invitation['id']}",
+        headers=third_headers,
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_remove_collaborator_404_not_found(
+    client: AsyncClient, owner_headers: dict, project: dict
+) -> None:
+    """Returns 404 when collaborator record does not exist."""
+    fake_id = uuid.uuid4()
+    response = await client.delete(
+        f"/api/projects/{project['id']}/collaborators/{fake_id}",
+        headers=owner_headers,
+    )
+    assert response.status_code == 404
+
+
 @pytest.mark.asyncio
 async def test_invite_collaborator_admin_can_invite(
     client: AsyncClient,

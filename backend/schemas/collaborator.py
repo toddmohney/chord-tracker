@@ -11,6 +11,10 @@ class CollaboratorInviteRequest(BaseModel):
     role: CollaboratorRole
 
 
+class CollaboratorStatusUpdateRequest(BaseModel):
+    status: CollaboratorStatus
+
+
 class CollaboratorResponse(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
