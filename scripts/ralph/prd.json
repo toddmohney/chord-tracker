@@ -1,21 +1,19 @@
 {
   "project": "Chord Tracker",
-  "branchName": "ralph/starting-fret",
-  "description": "Starting Fret Number on Fretboard Chart - Allow specifying a starting fret so chords and scale patterns higher up the neck display correctly.",
+  "branchName": "ralph/chord-staff-sequencer",
+  "description": "Chord Staff Sequencer - Add a chord sequencing view to the song detail page where users can arrange their song's chords onto a visual music staff with measures, barlines, and repeat annotations.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add starting_fret field to backend Chord model",
-      "description": "As a developer, I need to persist a starting fret per chord so it survives page reloads and is available via the API.",
+      "title": "Create sequence data model and migrations",
+      "description": "As a developer, I need database tables to store chord sequences so that sequencing data can be persisted.",
       "acceptanceCriteria": [
-        "Add `starting_fret` integer column to `chords` table with default value `0` (0 means from the nut)",
-        "Create and run an Alembic migration for the new column",
-        "Add `starting_fret` field to `ChordCreate` schema (default 0)",
-        "Add `starting_fret` field to `ChordUpdate` schema (optional)",
-        "Add `starting_fret` field to `ChordResponse` schema",
-        "Existing chords default to `starting_fret = 0` with no data loss",
-        "Existing backend tests still pass",
-        "Lint passes"
+        "`sequence` table created with columns: `id`, `song_id` (FK → songs, unique), `time_signature_numerator` (int, default 4), `time_signature_denominator` (int, default 4), `measures_per_line` (int, default 4), `created_at`, `updated_at`",
+        "`sequence_measure` table created with columns: `id`, `sequence_id` (FK → sequence), `position` (int, 0-based), `repeat_start` (bool, default false), `repeat_end` (bool, default false), `ending_number` (int, nullable)",
+        "`sequence_beat` table created with columns: `id`, `measure_id` (FK → sequence_measure), `beat_position` (int, 1-based), `chord_id` (FK → chords, nullable)",
+        "Alembic migration generated and applied successfully",
+        "Existing tests still pass",
+        "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
@@ -23,101 +21,156 @@
     },
     {
       "id": "US-002",
-      "title": "Add startingFret prop to GuitarNeck component",
-      "description": "As a developer, I want the GuitarNeck component to accept a startingFret prop so it renders the correct fret range.",
+      "title": "Backend API for sequence CRUD",
+      "description": "As a developer, I need REST endpoints to create, read, and update a song's chord sequence so the frontend can persist changes.",
       "acceptanceCriteria": [
-        "Add optional `startingFret` prop (default `0`) to `GuitarNeckProps`",
-        "Fret number labels display `startingFret + 1` through `startingFret + fretCount` (e.g., if startingFret=4, labels show 5,6,7,8,9)",
-        "When `startingFret > 0`, the thick nut bar is hidden and replaced by a normal fret line",
-        "When `startingFret === 0`, the nut bar renders as it does today (thick dark bar)",
-        "Marker fret values are absolute — the component subtracts startingFret to determine visual position",
-        "Tap targets emit absolute fret numbers (startingFret + relative position)",
-        "Markers outside the visible fret window are not rendered but data is preserved",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "`GET /api/songs/{song_id}/sequence` returns full sequence with nested measures and beats; returns 404 if none exists",
+        "`POST /api/songs/{song_id}/sequence` creates a new sequence for the song; returns 409 if one already exists",
+        "`PUT /api/songs/{song_id}/sequence` replaces the full sequence (measures + beats) with the payload",
+        "`DELETE /api/songs/{song_id}/sequence` deletes the sequence and all child records",
+        "All endpoints require authentication and verify the song belongs to the authenticated user (403 otherwise)",
+        "Pydantic request/response schemas defined for all endpoints",
+        "Existing tests still pass",
+        "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Add starting fret control to chord editor UI",
-      "description": "As a user, I want to adjust the starting fret in the chord editor so I can create chords at any neck position.",
+      "title": "Display chord staff on song detail page",
+      "description": "As a user, I want to see a music-staff-style display on the song detail page so I can visualize chord sequences like sheet music.",
       "acceptanceCriteria": [
-        "Display the current starting fret value near the fretboard (e.g., 'Starting fret: 5')",
-        "Provide increment (+) and decrement (−) buttons to change the starting fret",
-        "Minimum starting fret is 0 (nut position); maximum is 19",
-        "Changing the starting fret updates the fretboard display immediately",
-        "The starting fret value is included when saving a chord (persisted to backend via API)",
-        "When editing an existing chord, the starting fret control is pre-populated with the chord's saved starting_fret value",
+        "A 'Chord Sequence' section appears below the existing chord list on the song detail page",
+        "Staff renders multiple lines, each containing 4 measures (measures_per_line)",
+        "Each measure is separated by a vertical barline",
+        "The time signature (e.g., '4/4') is displayed at the start of the first line",
+        "Each measure shows 4 beat slots (matching numerator) for 4/4 time",
+        "Empty beat slots display a placeholder (dashed outline)",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Update chord templates with starting fret data",
-      "description": "As a user browsing chord templates, I want templates to display at the correct neck position so I can learn proper finger placement.",
+      "title": "Save and load sequence",
+      "description": "As a user, I want my chord sequence to be saved and reloaded when I return to the song so my work is not lost.",
       "acceptanceCriteria": [
-        "Add `starting_fret` field to `ChordTemplate` interface (default `0`)",
-        "Update B and Bm templates to use `starting_fret: 2` with markers adjusted to absolute fret numbers",
-        "Templates with `starting_fret: 0` (A, Am, C, D, Dm, E, Em, F, G) remain unchanged",
-        "Selecting a template in the browser populates both markers and starting fret in the editor",
-        "Template preview renders with the correct starting fret passed to GuitarNeck",
+        "A 'Save Sequence' button sends the full current sequence state to `PUT /api/songs/{song_id}/sequence`",
+        "On page load, the frontend fetches the existing sequence via `GET /api/songs/{song_id}/sequence` and renders it",
+        "If no sequence exists yet, the staff initializes with 4 empty measures in 4/4 time",
+        "A success toast is shown after a successful save",
+        "An error toast is shown if the save fails",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Display starting fret on chord card previews",
-      "description": "As a user viewing my saved chords, I want the mini fretboard previews to reflect the correct starting fret so I can tell chords apart at a glance.",
+      "title": "Drag a chord from the chord list onto a beat slot",
+      "description": "As a user, I want to drag a chord from the song's chord list onto the staff so I can build my chord sequence.",
       "acceptanceCriteria": [
-        "Chord card previews pass `startingFret` from the chord's `starting_fret` API field to GuitarNeck",
-        "Fret numbers on mini previews reflect the actual fret position on the neck",
+        "Each chord in the existing chord list acts as a drag source",
+        "Each beat slot in the staff is a drop target",
+        "Dropping a chord onto an empty slot places it there and displays the chord name",
+        "Dropping a chord onto an occupied slot replaces the existing chord",
+        "A chord can be placed on multiple different beat slots",
+        "The placement is reflected immediately in the UI without a page reload",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Auto-adjust starting fret when loading chords",
-      "description": "As a user, I want the starting fret to auto-adjust when I open a chord whose markers fall outside the default 0-5 range, so I can see all markers immediately.",
+      "title": "Remove a chord from a beat slot",
+      "description": "As a user, I want to clear a chord from a beat slot so I can correct mistakes or leave a beat empty.",
       "acceptanceCriteria": [
-        "When opening the chord editor for an existing chord, if any markers have fret values above startingFret + fretCount, auto-adjust startingFret so all markers are visible",
-        "Auto-adjustment uses the minimum fret among markers minus 1 (or 0 if that would be negative) as the starting fret",
-        "If the chord already has a saved starting_fret that shows all markers, use the saved value instead of recalculating",
+        "Clicking a filled beat slot opens a small popover or context menu with a 'Remove' option",
+        "Selecting 'Remove' clears the slot back to the empty placeholder state",
+        "Removed chord is reflected in the sequence state immediately",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Show subtle indicator for out-of-range markers",
-      "description": "As a user, I want a visual hint when my chord has markers outside the currently visible fret window so I know there are hidden notes.",
+      "title": "Add and remove measures",
+      "description": "As a user, I want to add or remove measures on the staff so I can match the length of my song.",
       "acceptanceCriteria": [
-        "When a chord has markers below the visible fret range, show a small indicator (e.g., badge or arrow) above the fretboard",
-        "When a chord has markers above the visible fret range, show a small indicator below the fretboard",
-        "The indicator shows the count of hidden markers (e.g., '2 markers below')",
-        "Indicators are shown in both the editor and the card previews",
+        "An 'Add Measure' button appends a new empty measure to the end of the staff",
+        "A remove button ('×') on each measure deletes that measure and its beats",
+        "Removing a measure with chords shows a confirmation dialog: 'This will remove all chords in this measure'",
+        "Measures are repositioned correctly after removal (positions remain 0-based and contiguous)",
+        "Staff lines reflow automatically when measure count changes (e.g., 5th measure starts a new line of 4)",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Configure time signature",
+      "description": "As a user, I want to set the time signature for a song's sequence so the correct number of beats per measure is shown.",
+      "acceptanceCriteria": [
+        "A time signature selector is displayed above the staff (numerator: 2–12; denominator: 2, 4, 8, 16)",
+        "Default is 4/4 when creating a new sequence",
+        "Changing the time signature updates the beat slot count in every measure immediately",
+        "If existing beats exceed the new numerator, those beats are removed after a confirmation dialog warning data will be lost",
+        "The updated time signature is persisted on save",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Add repeat barline annotations",
+      "description": "As a user, I want to mark sections of the staff with repeat barlines so I can indicate that a section should be played again.",
+      "acceptanceCriteria": [
+        "Each measure has a toggle for 'repeat start' and a toggle for 'repeat end'",
+        "Toggling repeat start on a measure displays a bold repeat-start barline (`|:`) to the left of that measure",
+        "Toggling repeat end on a measure displays a bold repeat-end barline (`:|`) to the right of that measure",
+        "Both toggles can be active simultaneously on the same measure",
+        "Repeat annotation state is persisted on save",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Add numbered ending annotations",
+      "description": "As a user, I want to mark measures as 1st or 2nd endings so I can write out repeated sections with different endings.",
+      "acceptanceCriteria": [
+        "Each measure has a selector for ending number: None, 1, or 2",
+        "A measure marked as ending 1 displays a bracket labeled '1.' above it",
+        "A measure marked as ending 2 displays a bracket labeled '2.' above it",
+        "Only one ending number can be active per measure at a time",
+        "Ending annotation state is persisted on save",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
       "notes": ""
     }
   ]
