@@ -412,6 +412,18 @@ export default function SongDetail() {
     )
   }
 
+  function handleToggleRepeatStart(measureId: string) {
+    setSequenceMeasures((prev) =>
+      prev.map((m) => (m.id === measureId ? { ...m, repeat_start: !m.repeat_start } : m)),
+    )
+  }
+
+  function handleToggleRepeatEnd(measureId: string) {
+    setSequenceMeasures((prev) =>
+      prev.map((m) => (m.id === measureId ? { ...m, repeat_end: !m.repeat_end } : m)),
+    )
+  }
+
   function handleRemoveBeat(measureId: string, beatPosition: number) {
     setSequenceMeasures((prev) =>
       prev.map((m) => {
@@ -931,6 +943,8 @@ export default function SongDetail() {
             chordMap={Object.fromEntries(chords.map((c) => [c.id, c.name ?? 'Untitled']))}
             onRemoveBeat={handleRemoveBeat}
             onRemoveMeasure={handleRemoveMeasure}
+            onToggleRepeatStart={handleToggleRepeatStart}
+            onToggleRepeatEnd={handleToggleRepeatEnd}
           />
         </div>
       </DndContext>

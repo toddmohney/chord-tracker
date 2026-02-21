@@ -10,6 +10,8 @@ export interface ChordStaffProps {
   chordMap: Record<string, string>
   onRemoveBeat: (measureId: string, beatPosition: number) => void
   onRemoveMeasure: (measureId: string) => void
+  onToggleRepeatStart: (measureId: string) => void
+  onToggleRepeatEnd: (measureId: string) => void
 }
 
 function TimeSignature({ numerator, denominator }: { numerator: number; denominator: number }) {
@@ -89,16 +91,29 @@ function Barline({ bold = false }: { bold?: boolean }) {
   )
 }
 
+function RepeatDots() {
+  return (
+    <div className="self-stretch flex flex-col items-center justify-center gap-1 px-0.5">
+      <div className="h-1.5 w-1.5 rounded-full bg-gray-700" />
+      <div className="h-1.5 w-1.5 rounded-full bg-gray-700" />
+    </div>
+  )
+}
+
 function Measure({
   measure,
   chordMap,
   onRemoveBeat,
   onRemoveMeasure,
+  onToggleRepeatStart,
+  onToggleRepeatEnd,
 }: {
   measure: SequenceMeasure
   chordMap: Record<string, string>
   onRemoveBeat: (measureId: string, beatPosition: number) => void
   onRemoveMeasure: (measureId: string) => void
+  onToggleRepeatStart: (measureId: string) => void
+  onToggleRepeatEnd: (measureId: string) => void
 }) {
   const [confirmingRemove, setConfirmingRemove] = useState(false)
   const hasChords = measure.beats.some((b) => b.chord_id !== null)
@@ -164,6 +179,33 @@ function Measure({
           />
         ))}
       </div>
+      {/* Repeat annotation toggles */}
+      <div className="flex items-center justify-between mt-0.5">
+        <button
+          type="button"
+          onClick={() => onToggleRepeatStart(measure.id)}
+          className={`rounded px-1 py-0.5 font-mono text-xs font-bold leading-none ${
+            measure.repeat_start
+              ? 'bg-gray-700 text-white'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+          title="Toggle repeat start"
+        >
+          |:
+        </button>
+        <button
+          type="button"
+          onClick={() => onToggleRepeatEnd(measure.id)}
+          className={`rounded px-1 py-0.5 font-mono text-xs font-bold leading-none ${
+            measure.repeat_end
+              ? 'bg-gray-700 text-white'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+          title="Toggle repeat end"
+        >
+          :|
+        </button>
+      </div>
     </div>
   )
 }
@@ -176,6 +218,8 @@ export default function ChordStaff({
   chordMap,
   onRemoveBeat,
   onRemoveMeasure,
+  onToggleRepeatStart,
+  onToggleRepeatEnd,
 }: ChordStaffProps) {
   // Split measures into lines
   const lines: SequenceMeasure[][] = []
@@ -195,34 +239,81 @@ export default function ChordStaff({
             <TimeSignature numerator={numerator} denominator={denominator} />
           )}
 
-          {/* Opening barline */}
-          <Barline />
+          {/* Opening barline — |: if first measure has repeat_start */}
+          {lineMeasures[0]?.repeat_start ? (
+            <>
+              <Barline />
+              <Barline bold />
+              <RepeatDots />
+            </>
+          ) : (
+            <Barline />
+          )}
 
-          {lineMeasures.map((measure, measureIndex) => (
-            <div key={measure.id} className="flex min-w-0 flex-1 items-stretch">
-              <Measure
-                measure={measure}
-                chordMap={chordMap}
-                onRemoveBeat={onRemoveBeat}
-                onRemoveMeasure={onRemoveMeasure}
-              />
-              {/* Barline after each measure */}
-              {measure.repeat_end ? (
+          {lineMeasures.map((measure, measureIndex) => {
+            const isLast = measureIndex === lineMeasures.length - 1
+            const nextMeasure = lineMeasures[measureIndex + 1]
+            const repeatEnd = measure.repeat_end
+            const nextRepeatStart = nextMeasure?.repeat_start ?? false
+
+            // Determine barline to render after this measure
+            let barlineContent
+            if (repeatEnd && !isLast && nextRepeatStart) {
+              // :|: combined — dots | bold | thin | bold | dots
+              barlineContent = (
+                <>
+                  <RepeatDots />
+                  <Barline bold />
+                  <Barline />
+                  <Barline bold />
+                  <RepeatDots />
+                </>
+              )
+            } else if (repeatEnd) {
+              // :| — dots | bold | thin
+              barlineContent = (
+                <>
+                  <RepeatDots />
+                  <Barline bold />
+                  <Barline />
+                </>
+              )
+            } else if (!isLast && nextRepeatStart) {
+              // |: — thin | bold | dots
+              barlineContent = (
                 <>
                   <Barline />
                   <Barline bold />
+                  <RepeatDots />
                 </>
-              ) : measureIndex === lineMeasures.length - 1 ? (
-                // Double barline at end of line
+              )
+            } else if (isLast) {
+              // Double barline at end of line
+              barlineContent = (
                 <>
                   <Barline />
                   <Barline />
                 </>
-              ) : (
-                <Barline />
-              )}
-            </div>
-          ))}
+              )
+            } else {
+              barlineContent = <Barline />
+            }
+
+            return (
+              <div key={measure.id} className="flex min-w-0 flex-1 items-stretch">
+                <Measure
+                  measure={measure}
+                  chordMap={chordMap}
+                  onRemoveBeat={onRemoveBeat}
+                  onRemoveMeasure={onRemoveMeasure}
+                  onToggleRepeatStart={onToggleRepeatStart}
+                  onToggleRepeatEnd={onToggleRepeatEnd}
+                />
+                {/* Barline after measure */}
+                {barlineContent}
+              </div>
+            )
+          })}
         </div>
       ))}
     </div>
