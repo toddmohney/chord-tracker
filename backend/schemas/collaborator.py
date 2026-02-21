@@ -30,3 +30,14 @@ class CollaboratorResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class PendingInvitationResponse(BaseModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    project_name: str
+    inviter_email: str
+    role: CollaboratorRole
+    status: CollaboratorStatus
+    created_at: datetime
+    updated_at: datetime

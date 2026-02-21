@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import AppLayout from '../components/AppLayout'
+import PendingInvitationsModal from '../components/PendingInvitationsModal'
 
 interface Project {
   id: string
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [showInvitationsModal, setShowInvitationsModal] = useState(true)
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -109,6 +111,10 @@ export default function Dashboard() {
   }
 
   return (
+    <>
+      {showInvitationsModal && (
+        <PendingInvitationsModal onClose={() => setShowInvitationsModal(false)} />
+      )}
     <AppLayout title="My Projects">
       {error && (
         <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
@@ -269,5 +275,6 @@ export default function Dashboard() {
         </div>
       )}
     </AppLayout>
+    </>
   )
 }

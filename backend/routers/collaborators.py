@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from auth.dependencies import get_current_user
 from auth.project_access import ProjectRole, check_project_access
@@ -14,6 +15,7 @@ from schemas.collaborator import (
     CollaboratorResponse,
     CollaboratorRoleUpdateRequest,
     CollaboratorStatusUpdateRequest,
+    PendingInvitationResponse,
 )
 
 router = APIRouter()
@@ -102,6 +104,38 @@ async def update_collaborator_status(
     await db.commit()
     await db.refresh(collab)
     return collab
+
+
+@status_router.get("/collaborators/pending", response_model=list[PendingInvitationResponse])
+async def list_pending_invitations(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[PendingInvitationResponse]:
+    result = await db.execute(
+        select(ProjectCollaborator)
+        .where(
+            ProjectCollaborator.invitee_id == current_user.id,
+            ProjectCollaborator.status == CollaboratorStatus.pending,
+        )
+        .options(
+            selectinload(ProjectCollaborator.project),
+            selectinload(ProjectCollaborator.inviter),
+        )
+    )
+    collabs = result.scalars().all()
+    return [
+        PendingInvitationResponse(
+            id=c.id,
+            project_id=c.project_id,
+            project_name=c.project.name,
+            inviter_email=c.inviter.email,
+            role=c.role,
+            status=c.status,
+            created_at=c.created_at,
+            updated_at=c.updated_at,
+        )
+        for c in collabs
+    ]
 
 
 @router.get("/{project_id}/collaborators", response_model=list[CollaboratorResponse])

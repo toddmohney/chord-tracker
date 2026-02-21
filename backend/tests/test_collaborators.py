@@ -496,3 +496,48 @@ async def test_invite_collaborator_admin_can_invite(
     )
     # invitee has only a pending invitation (not yet accepted), so 403
     assert response.status_code == 403
+
+
+# --- GET /collaborators/pending ---
+
+
+@pytest.mark.asyncio
+async def test_list_pending_invitations_returns_pending(
+    client: AsyncClient, invitee_headers: dict, invitation: dict, project: dict, owner: dict
+) -> None:
+    """Invitee sees their pending invitation with project name and inviter email."""
+    response = await client.get("/api/collaborators/pending", headers=invitee_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == invitation["id"]
+    assert data[0]["project_id"] == project["id"]
+    assert data[0]["project_name"] == project["name"]
+    assert data[0]["inviter_email"] == owner["email"]
+    assert data[0]["role"] == invitation["role"]
+    assert data[0]["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_list_pending_invitations_empty_when_none(
+    client: AsyncClient, invitee_headers: dict
+) -> None:
+    """User with no pending invitations gets an empty list."""
+    response = await client.get("/api/collaborators/pending", headers=invitee_headers)
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_pending_invitations_excludes_accepted(
+    client: AsyncClient, invitee_headers: dict, invitation: dict
+) -> None:
+    """Accepted invitation does not appear in the pending list."""
+    await client.patch(
+        f"/api/collaborators/{invitation['id']}",
+        json={"status": "accepted"},
+        headers=invitee_headers,
+    )
+    response = await client.get("/api/collaborators/pending", headers=invitee_headers)
+    assert response.status_code == 200
+    assert response.json() == []
