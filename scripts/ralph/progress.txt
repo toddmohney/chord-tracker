@@ -8,6 +8,9 @@
 - Tests run via `.venv/bin/pytest tests/ -x -q` from backend directory
 - Ruff linter at `.venv/bin/ruff`, line length 100
 - No mypy installed; typecheck is implied via ruff + Python import verification
+- SQLAlchemy `default=uuid.uuid4` on primary keys runs at INSERT time, NOT at Python object construction — `obj.id` is None until flushed/committed. Explicitly pass `id=uuid.uuid4()` when you need the id before inserting (e.g., to set a FK on a related object in the same batch)
+- Use `selectinload(Parent.children).selectinload(Child.grandchildren)` for eager loading nested relationships in async SQLAlchemy (avoids MissingGreenlet errors from lazy loads)
+- For bulk DELETE+recreate in PUT endpoints: delete child records first (beats), then parent (measures) using `db.execute(delete(Model).where(...))` to work in both SQLite (tests) and PostgreSQL (production)
 ---
 
 # Ralph Progress Log
@@ -27,4 +30,18 @@ Started: Sat Feb 21 10:55:30 EST 2026
   - `sequence_beat.chord_id` uses `ondelete="SET NULL"` (not CASCADE) since removing a chord shouldn't destroy beat slots
   - `UniqueConstraint` in `__table_args__` must be a tuple — trailing comma required for single-element tuple
   - Ruff line length is 100; watch for long `__table_args__` lines
+---
+
+## 2026-02-21 - US-002
+- What was implemented: REST API endpoints for sequence CRUD (`GET`, `POST`, `PUT`, `DELETE /api/songs/{song_id}/sequence`). Pydantic schemas for request/response. 17 new tests covering all endpoints and auth scenarios.
+- Files changed:
+  - `backend/schemas/sequence.py` (new) — SequenceCreate, SequenceUpdate, SequenceResponse, nested measure/beat schemas
+  - `backend/routers/sequence.py` (new) — 4 endpoints with auth + ownership checks
+  - `backend/main.py` (added sequence_router)
+  - `backend/tests/test_sequence.py` (new) — 17 tests
+- **Learnings for future iterations:**
+  - SQLAlchemy `default=uuid.uuid4` runs at INSERT time, not Python construction — pass `id=uuid.uuid4()` explicitly when the id is needed before flush
+  - For bulk DELETE+recreate in PUT: delete child records (beats) first with `db.execute(delete(...))`, then parent (measures) — required for SQLite FK compatibility in tests
+  - `selectinload(Sequence.measures).selectinload(SequenceMeasure.beats)` chains work correctly for nested eager loading
+  - When deleting with `db.delete(sequence)` and ORM cascade, load the full relationship tree with `selectinload` first so SQLAlchemy knows what to cascade-delete in SQLite
 ---
