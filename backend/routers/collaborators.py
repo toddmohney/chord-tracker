@@ -5,9 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import get_current_user
+from auth.project_access import ProjectRole, check_project_access
 from database.session import get_db
-from models.collaborator import CollaboratorRole, CollaboratorStatus, ProjectCollaborator
-from models.project import Project
+from models.collaborator import CollaboratorStatus, ProjectCollaborator
 from models.user import User
 from schemas.collaborator import (
     CollaboratorInviteRequest,
@@ -18,6 +18,8 @@ from schemas.collaborator import (
 
 router = APIRouter()
 status_router = APIRouter()
+
+_ADMIN_ROLES = {ProjectRole.owner, ProjectRole.admin}
 
 
 @router.post(
@@ -31,25 +33,10 @@ async def invite_collaborator(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ProjectCollaborator:
-    # Load project
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    project, role = await check_project_access(project_id, current_user, db)
 
-    # Check that requester is the owner or an admin collaborator
-    is_owner = project.user_id == current_user.id
-    if not is_owner:
-        collab_result = await db.execute(
-            select(ProjectCollaborator).where(
-                ProjectCollaborator.project_id == project_id,
-                ProjectCollaborator.invitee_id == current_user.id,
-                ProjectCollaborator.status == CollaboratorStatus.accepted,
-            )
-        )
-        collab = collab_result.scalar_one_or_none()
-        if not collab or collab.role != CollaboratorRole.admin:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    if role not in _ADMIN_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     # Look up invitee by email (User model has no username field)
     user_result = await db.execute(select(User).where(User.email == data.identifier))
@@ -123,23 +110,10 @@ async def list_collaborators(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[ProjectCollaborator]:
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    _, role = await check_project_access(project_id, current_user, db)
 
-    is_owner = project.user_id == current_user.id
-    if not is_owner:
-        collab_result = await db.execute(
-            select(ProjectCollaborator).where(
-                ProjectCollaborator.project_id == project_id,
-                ProjectCollaborator.invitee_id == current_user.id,
-                ProjectCollaborator.status == CollaboratorStatus.accepted,
-                ProjectCollaborator.role == CollaboratorRole.admin,
-            )
-        )
-        if not collab_result.scalar_one_or_none():
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    if role not in _ADMIN_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     collab_result = await db.execute(
         select(ProjectCollaborator).where(ProjectCollaborator.project_id == project_id)
@@ -157,12 +131,9 @@ async def remove_collaborator(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    project, role = await check_project_access(project_id, current_user, db)
 
-    if project.user_id != current_user.id:
+    if role != ProjectRole.owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     collab_result = await db.execute(
@@ -195,24 +166,10 @@ async def update_collaborator_role(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ProjectCollaborator:
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    _, role = await check_project_access(project_id, current_user, db)
 
-    # Only owner or accepted admin can change roles
-    is_owner = project.user_id == current_user.id
-    if not is_owner:
-        collab_result = await db.execute(
-            select(ProjectCollaborator).where(
-                ProjectCollaborator.project_id == project_id,
-                ProjectCollaborator.invitee_id == current_user.id,
-                ProjectCollaborator.status == CollaboratorStatus.accepted,
-                ProjectCollaborator.role == CollaboratorRole.admin,
-            )
-        )
-        if not collab_result.scalar_one_or_none():
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    if role not in _ADMIN_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     collab_result = await db.execute(
         select(ProjectCollaborator).where(

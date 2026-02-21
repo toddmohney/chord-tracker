@@ -3,6 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_validator
 
+from models.collaborator import ProjectRole
+
 
 class ProjectCreate(BaseModel):
     name: str
@@ -32,6 +34,7 @@ class ProjectResponse(BaseModel):
     id: uuid.UUID
     name: str
     user_id: uuid.UUID
+    my_role: ProjectRole | None = None
     created_at: datetime
     updated_at: datetime
 

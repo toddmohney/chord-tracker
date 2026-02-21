@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from auth.dependencies import get_current_user
+from auth.project_access import ProjectRole, check_project_access
 from database.session import get_db
-from models.project import Project
 from models.sequence import Sequence, SequenceBeat, SequenceMeasure
 from models.song import Song
 from models.user import User
@@ -15,26 +15,23 @@ from schemas.sequence import SequenceCreate, SequenceResponse, SequenceUpdate
 
 router = APIRouter()
 
+_EDITOR_ROLES = {ProjectRole.owner, ProjectRole.admin, ProjectRole.editor}
 
-async def _get_owned_song(
+
+async def _get_song_with_role(
     song_id: uuid.UUID,
     current_user: User,
     db: AsyncSession,
-) -> Song:
-    """Fetch a song and verify ownership through its project."""
+) -> tuple[Song, ProjectRole]:
+    """Fetch a song and determine caller's role on its project."""
     result = await db.execute(select(Song).where(Song.id == song_id))
     song = result.scalar_one_or_none()
 
     if not song:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Song not found")
 
-    result = await db.execute(select(Project).where(Project.id == song.project_id))
-    project = result.scalar_one_or_none()
-
-    if not project or project.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-
-    return song
+    _, role = await check_project_access(song.project_id, current_user, db)
+    return song, role
 
 
 async def _get_sequence_with_measures(
@@ -56,7 +53,7 @@ async def get_sequence(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Sequence:
-    await _get_owned_song(song_id, current_user, db)
+    await _get_song_with_role(song_id, current_user, db)
 
     sequence = await _get_sequence_with_measures(song_id, db)
     if not sequence:
@@ -76,7 +73,10 @@ async def create_sequence(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Sequence:
-    await _get_owned_song(song_id, current_user, db)
+    _, role = await _get_song_with_role(song_id, current_user, db)
+
+    if role not in _EDITOR_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     existing = await db.execute(select(Sequence).where(Sequence.song_id == song_id))
     if existing.scalar_one_or_none():
@@ -105,7 +105,10 @@ async def update_sequence(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Sequence:
-    await _get_owned_song(song_id, current_user, db)
+    _, role = await _get_song_with_role(song_id, current_user, db)
+
+    if role not in _EDITOR_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     result = await db.execute(select(Sequence).where(Sequence.song_id == song_id))
     sequence = result.scalar_one_or_none()
@@ -160,7 +163,10 @@ async def delete_sequence(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    await _get_owned_song(song_id, current_user, db)
+    _, role = await _get_song_with_role(song_id, current_user, db)
+
+    if role not in _EDITOR_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     sequence = await _get_sequence_with_measures(song_id, db)
     if not sequence:

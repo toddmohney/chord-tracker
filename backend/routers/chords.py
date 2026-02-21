@@ -5,51 +5,48 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import get_current_user
+from auth.project_access import ProjectRole, check_project_access
 from database.session import get_db
 from models.chord import Chord
-from models.project import Project
 from models.song import Song
 from models.user import User
 from schemas.chord import ChordCreate, ChordResponse, ChordUpdate, ReorderRequest
 
 router = APIRouter()
 
+_EDITOR_ROLES = {ProjectRole.owner, ProjectRole.admin, ProjectRole.editor}
 
-async def _get_owned_song(
+
+async def _get_song_with_role(
     song_id: uuid.UUID,
     current_user: User,
     db: AsyncSession,
-) -> Song:
-    """Fetch a song and verify ownership through its project."""
+) -> tuple[Song, ProjectRole]:
+    """Fetch a song and determine caller's role on its project."""
     result = await db.execute(select(Song).where(Song.id == song_id))
     song = result.scalar_one_or_none()
 
     if not song:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Song not found")
 
-    result = await db.execute(select(Project).where(Project.id == song.project_id))
-    project = result.scalar_one_or_none()
-
-    if not project or project.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-
-    return song
+    _, role = await check_project_access(song.project_id, current_user, db)
+    return song, role
 
 
-async def _get_owned_chord(
+async def _get_chord_with_role(
     chord_id: uuid.UUID,
     current_user: User,
     db: AsyncSession,
-) -> Chord:
-    """Fetch a chord and verify ownership through song -> project -> user."""
+) -> tuple[Chord, ProjectRole]:
+    """Fetch a chord and determine caller's role through song -> project."""
     result = await db.execute(select(Chord).where(Chord.id == chord_id))
     chord = result.scalar_one_or_none()
 
     if not chord:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chord not found")
 
-    await _get_owned_song(chord.song_id, current_user, db)
-    return chord
+    _, role = await _get_song_with_role(chord.song_id, current_user, db)
+    return chord, role
 
 
 @router.get("/songs/{song_id}/chords", response_model=list[ChordResponse])
@@ -58,7 +55,7 @@ async def list_chords(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[Chord]:
-    await _get_owned_song(song_id, current_user, db)
+    await _get_song_with_role(song_id, current_user, db)
 
     result = await db.execute(
         select(Chord).where(Chord.song_id == song_id).order_by(Chord.position)
@@ -77,7 +74,10 @@ async def create_chord(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Chord:
-    await _get_owned_song(song_id, current_user, db)
+    _, role = await _get_song_with_role(song_id, current_user, db)
+
+    if role not in _EDITOR_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     # Auto-assign next position
     result = await db.execute(
@@ -108,7 +108,10 @@ async def update_chord(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Chord:
-    chord = await _get_owned_chord(chord_id, current_user, db)
+    chord, role = await _get_chord_with_role(chord_id, current_user, db)
+
+    if role not in _EDITOR_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     if data.name is not None:
         chord.name = data.name
@@ -132,7 +135,11 @@ async def delete_chord(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    chord = await _get_owned_chord(chord_id, current_user, db)
+    chord, role = await _get_chord_with_role(chord_id, current_user, db)
+
+    if role not in _EDITOR_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
     song_id = chord.song_id
     deleted_position = chord.position
 
@@ -160,7 +167,10 @@ async def reorder_chords(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[Chord]:
-    await _get_owned_song(song_id, current_user, db)
+    _, role = await _get_song_with_role(song_id, current_user, db)
+
+    if role not in _EDITOR_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     # Fetch all chords for this song
     result = await db.execute(select(Chord).where(Chord.song_id == song_id))

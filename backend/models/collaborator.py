@@ -9,6 +9,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
 
+class ProjectRole(StrEnum):
+    owner = "owner"
+    admin = "admin"
+    editor = "editor"
+    viewer = "viewer"
+
+
 class CollaboratorRole(StrEnum):
     viewer = "viewer"
     editor = "editor"
