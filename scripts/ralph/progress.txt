@@ -1,4 +1,7 @@
 ## Codebase Patterns
+- Frontend: React 19 + TypeScript (strict: noUnusedLocals, noUnusedParameters) + Vite + Tailwind CSS 4
+- Frontend lint rule `react-refresh/only-export-components` requires non-component exports (types, utils) to live in separate files (e.g., `src/types/`)
+- Frontend typecheck: `npx tsc -b --noEmit` from `frontend/` dir; lint: `npm run lint`
 - Backend uses SQLAlchemy 2.0+ async with `Mapped` type hints and `mapped_column`
 - All models use `UUID(as_uuid=True)` primary keys with `default=uuid.uuid4`
 - Timestamps: `DateTime(timezone=True)` with `server_default=func.now()` and `onupdate=func.now()` for `updated_at`
@@ -44,4 +47,17 @@ Started: Sat Feb 21 10:55:30 EST 2026
   - For bulk DELETE+recreate in PUT: delete child records (beats) first with `db.execute(delete(...))`, then parent (measures) — required for SQLite FK compatibility in tests
   - `selectinload(Sequence.measures).selectinload(SequenceMeasure.beats)` chains work correctly for nested eager loading
   - When deleting with `db.delete(sequence)` and ORM cascade, load the full relationship tree with `selectinload` first so SQLAlchemy knows what to cascade-delete in SQLite
+---
+
+## 2026-02-21 - US-003
+- What was implemented: `ChordStaff` component renders a music-staff-style display with time signature, barlines, multiple lines of measures, and empty beat slots (dashed outlines). Added "Chord Sequence" section below chord list on song detail page.
+- Files changed:
+  - `frontend/src/components/ChordStaff.tsx` (new) — staff display component with `TimeSignature`, `Barline`, `BeatSlot`, `Measure` sub-components
+  - `frontend/src/types/sequence.ts` (new) — `SequenceBeat`, `SequenceMeasure` interfaces + `buildDefaultMeasures` utility
+  - `frontend/src/pages/SongDetail.tsx` (updated) — imported ChordStaff, added sequence state (4 measures, 4/4), rendered Chord Sequence section below chord list
+- **Learnings for future iterations:**
+  - ESLint rule `react-refresh/only-export-components` forbids exporting non-component values (types, functions) from component files — put shared types/utils in `src/types/` or `src/utils/`
+  - Frontend typecheck command: `npx tsc -b --noEmit` (run from `frontend/` dir); no separate `typecheck` npm script
+  - TypeScript strict `noUnusedLocals` means unused state setters (e.g., `setSequenceMeasures`) must be removed from destructuring until actually needed
+  - Browser verification was not done (no browser tool available) — manual check recommended
 ---
