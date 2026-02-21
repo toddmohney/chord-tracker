@@ -56,3 +56,16 @@ Started: Sat Feb 21 12:30:35 EST 2026
   - PATCH role endpoint (US-004) will be at `/api/projects/{project_id}/collaborators/{id}` — use the existing `router`
   - Test fixture `invitation` creates a pending collaborator record for reuse across tests
 ---
+
+## 2026-02-21 - US-004
+- Added `CollaboratorRoleUpdateRequest` Pydantic schema to `backend/schemas/collaborator.py`
+- Added PATCH `/{project_id}/collaborators/{collaborator_id}` endpoint to `backend/routers/collaborators.py`
+  - Owner or accepted admin can change role; returns 403 otherwise
+  - Returns 404 if collaborator record not found on this project
+  - Role change works regardless of collaborator status (pending or accepted)
+- Added 5 new tests (24 total in test_collaborators.py, all passing)
+- **Learnings for future iterations:**
+  - Role update endpoint is at `/api/projects/{project_id}/collaborators/{id}` using the existing `router`
+  - The `status_router` is only for the status PATCH at `/api/collaborators/{id}`
+  - Admin authorization check requires both `status == accepted` AND `role == admin`
+---
