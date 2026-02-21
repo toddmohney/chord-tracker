@@ -1,4 +1,7 @@
 ## Codebase Patterns
+- When adding a new drop target type alongside existing sortable DnD, use a single DndContext wrapping both sections; distinguish drops via `over.data.current?.type` (useDroppable `data` prop)
+- Beat slot droppable IDs use `|` as separator (e.g., `beat|${measureId}|${beatPosition}`) to avoid UUID hyphen collisions when parsing
+- In handleDragEnd: check `over.data.current?.type === 'beat'` first, then fall through to sortable reorder; guard with `if (oldIndex === -1 || newIndex === -1) return` to avoid spurious reorders when dropping on non-chord targets
 - Frontend: React 19 + TypeScript (strict: noUnusedLocals, noUnusedParameters) + Vite + Tailwind CSS 4
 - Frontend lint rule `react-refresh/only-export-components` requires non-component exports (types, utils) to live in separate files (e.g., `src/types/`)
 - Frontend typecheck: `npx tsc -b --noEmit` from `frontend/` dir; lint: `npm run lint`
@@ -60,6 +63,19 @@ Started: Sat Feb 21 10:55:30 EST 2026
   - Sort API response arrays by position/beat_position before mapping — backend may not guarantee order
   - TypeScript strict mode: adding setters to useState is fine as long as all setters are actually used (e.g., in fetchSequence callbacks)
   - `SequenceApiResponse` placed in `src/types/sequence.ts` (not the component file) to avoid ESLint `only-export-components` issues
+---
+
+## 2026-02-21 - US-005
+- What was implemented: Each chord card in the chord list is now a drag source (already via `useSortable`). Each beat slot in `ChordStaff` uses `useDroppable` from `@dnd-kit/core`. Dragging a chord onto a beat slot sets that beat's `chord_id` and displays the chord name. Slots highlight blue on hover. Single `DndContext` wraps both chord list and staff. `chordMap` passed to `ChordStaff` for name display.
+- Files changed:
+  - `frontend/src/components/ChordStaff.tsx` — added `useDroppable` to `BeatSlot`, `chordMap` prop for name lookup, `measureId` prop threading, `isOver` visual highlight
+  - `frontend/src/pages/SongDetail.tsx` — lifted `DndContext` to wrap both chord list and staff, updated `handleDragEnd` to handle beat slot drops, passes `chordMap` to `ChordStaff`
+- **Learnings for future iterations:**
+  - `useSortable` chord cards automatically act as drag sources for the shared `DndContext` — no extra `useDraggable` needed
+  - Beat slot IDs use `beat|${measureId}|${beatPosition}` with `|` separator; UUID hyphens make `-` splitting unreliable
+  - Cast `over.data.current` to `{ type?: string; measureId?: string; beatPosition?: number }` for TypeScript safety
+  - `Object.fromEntries(chords.map(...))` inline in JSX is fine for small chord lists; avoids needing `useMemo`
+  - Browser verification not done (no browser tool) — manual check recommended
 ---
 
 ## 2026-02-21 - US-003
