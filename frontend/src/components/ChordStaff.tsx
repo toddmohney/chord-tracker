@@ -9,6 +9,7 @@ export interface ChordStaffProps {
   measures: SequenceMeasure[]
   chordMap: Record<string, string>
   onRemoveBeat: (measureId: string, beatPosition: number) => void
+  onRemoveMeasure: (measureId: string) => void
 }
 
 function TimeSignature({ numerator, denominator }: { numerator: number; denominator: number }) {
@@ -92,18 +93,64 @@ function Measure({
   measure,
   chordMap,
   onRemoveBeat,
+  onRemoveMeasure,
 }: {
   measure: SequenceMeasure
   chordMap: Record<string, string>
   onRemoveBeat: (measureId: string, beatPosition: number) => void
+  onRemoveMeasure: (measureId: string) => void
 }) {
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
+  const hasChords = measure.beats.some((b) => b.chord_id !== null)
+
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1 px-1">
-      {/* Ending number bracket */}
-      {measure.ending_number !== null && (
-        <div className="border-l border-t border-gray-500 px-1 text-xs font-medium text-gray-600">
-          {measure.ending_number}.
-        </div>
+      {/* Header row: ending bracket (left) + remove button (right) */}
+      <div className="flex min-h-[1.25rem] items-center justify-between">
+        {measure.ending_number !== null ? (
+          <div className="border-l border-t border-gray-500 px-1 text-xs font-medium text-gray-600">
+            {measure.ending_number}.
+          </div>
+        ) : (
+          <div />
+        )}
+        {confirmingRemove ? (
+          <span className="flex items-center gap-1 text-xs">
+            <button
+              type="button"
+              onClick={() => { onRemoveMeasure(measure.id); setConfirmingRemove(false) }}
+              className="rounded bg-red-600 px-1.5 py-0.5 text-white hover:bg-red-700"
+            >
+              Remove
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingRemove(false)}
+              className="rounded border border-gray-300 px-1.5 py-0.5 text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              if (hasChords) {
+                setConfirmingRemove(true)
+              } else {
+                onRemoveMeasure(measure.id)
+              }
+            }}
+            className="text-xs leading-none text-gray-400 hover:text-red-500"
+            aria-label="Remove measure"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {/* Confirmation message */}
+      {confirmingRemove && (
+        <p className="text-xs text-red-600">This will remove all chords in this measure</p>
       )}
       {/* Beat slots */}
       <div className="flex gap-1">
@@ -128,6 +175,7 @@ export default function ChordStaff({
   measures,
   chordMap,
   onRemoveBeat,
+  onRemoveMeasure,
 }: ChordStaffProps) {
   // Split measures into lines
   const lines: SequenceMeasure[][] = []
@@ -152,7 +200,12 @@ export default function ChordStaff({
 
           {lineMeasures.map((measure, measureIndex) => (
             <div key={measure.id} className="flex min-w-0 flex-1 items-stretch">
-              <Measure measure={measure} chordMap={chordMap} onRemoveBeat={onRemoveBeat} />
+              <Measure
+                measure={measure}
+                chordMap={chordMap}
+                onRemoveBeat={onRemoveBeat}
+                onRemoveMeasure={onRemoveMeasure}
+              />
               {/* Barline after each measure */}
               {measure.repeat_end ? (
                 <>

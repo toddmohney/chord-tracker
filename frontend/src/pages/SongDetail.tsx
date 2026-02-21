@@ -386,6 +386,31 @@ export default function SongDetail() {
     }
   }
 
+  function handleAddMeasure() {
+    setSequenceMeasures((prev) => {
+      const newMeasure: SequenceMeasure = {
+        id: crypto.randomUUID(),
+        position: prev.length,
+        repeat_start: false,
+        repeat_end: false,
+        ending_number: null,
+        beats: Array.from({ length: sequenceNumerator }, (_, i) => ({
+          beat_position: i + 1,
+          chord_id: null,
+        })),
+      }
+      return [...prev, newMeasure]
+    })
+  }
+
+  function handleRemoveMeasure(measureId: string) {
+    setSequenceMeasures((prev) =>
+      prev
+        .filter((m) => m.id !== measureId)
+        .map((m, index) => ({ ...m, position: index })),
+    )
+  }
+
   function handleRemoveBeat(measureId: string, beatPosition: number) {
     setSequenceMeasures((prev) =>
       prev.map((m) => {
@@ -801,13 +826,21 @@ export default function SongDetail() {
             <h2 className="text-base font-semibold text-gray-900">
               Chord Sequence
             </h2>
-            <button
-              onClick={handleSaveSequence}
-              disabled={sequenceSaving}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {sequenceSaving ? 'Saving...' : 'Save Sequence'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleAddMeasure}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                + Add Measure
+              </button>
+              <button
+                onClick={handleSaveSequence}
+                disabled={sequenceSaving}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {sequenceSaving ? 'Saving...' : 'Save Sequence'}
+              </button>
+            </div>
           </div>
           <ChordStaff
             numerator={sequenceNumerator}
@@ -816,6 +849,7 @@ export default function SongDetail() {
             measures={sequenceMeasures}
             chordMap={Object.fromEntries(chords.map((c) => [c.id, c.name ?? 'Untitled']))}
             onRemoveBeat={handleRemoveBeat}
+            onRemoveMeasure={handleRemoveMeasure}
           />
         </div>
       </DndContext>
