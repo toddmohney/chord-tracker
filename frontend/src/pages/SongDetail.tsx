@@ -399,10 +399,33 @@ export default function SongDetail() {
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
-    if (!over || active.id === over.id) return
+    if (!over) return
 
+    // Check if dropped on a beat slot
+    const beatData = over.data.current as { type?: string; measureId?: string; beatPosition?: number }
+    if (beatData?.type === 'beat' && beatData.measureId && beatData.beatPosition !== undefined) {
+      const chordId = String(active.id)
+      if (chords.some((c) => c.id === chordId)) {
+        setSequenceMeasures((prev) =>
+          prev.map((m) => {
+            if (m.id !== beatData.measureId) return m
+            return {
+              ...m,
+              beats: m.beats.map((b) =>
+                b.beat_position === beatData.beatPosition ? { ...b, chord_id: chordId } : b,
+              ),
+            }
+          }),
+        )
+      }
+      return
+    }
+
+    // Sortable chord reorder
+    if (active.id === over.id) return
     const oldIndex = chords.findIndex((c) => c.id === active.id)
     const newIndex = chords.findIndex((c) => c.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
     const reordered = arrayMove(chords, oldIndex, newIndex)
     setChords(reordered)
     await persistReorder(reordered)
@@ -708,26 +731,26 @@ export default function SongDetail() {
         </div>
       )}
 
-      {chords.length === 0 && !editorOpen ? (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 p-8 text-center sm:p-12">
-          <p className="text-gray-500">No chords yet.</p>
-          <p className="mt-1 text-sm text-gray-400">
-            Add your first chord to start building your progression.
-          </p>
-          <button
-            onClick={openNewChordEditor}
-            className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            Add Chord
-          </button>
-        </div>
-      ) : (
-        <>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        {chords.length === 0 && !editorOpen ? (
+          <div className="rounded-lg border-2 border-dashed border-gray-300 p-8 text-center sm:p-12">
+            <p className="text-gray-500">No chords yet.</p>
+            <p className="mt-1 text-sm text-gray-400">
+              Add your first chord to start building your progression.
+            </p>
+            <button
+              onClick={openNewChordEditor}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Add Chord
+            </button>
+          </div>
+        ) : (
+          <>
             <SortableContext
               items={chords.map((c) => c.id)}
               strategy={verticalListSortingStrategy}
@@ -747,39 +770,40 @@ export default function SongDetail() {
                 ))}
               </div>
             </SortableContext>
-          </DndContext>
-          <div className="mt-6">
+            <div className="mt-6">
+              <button
+                onClick={openNewChordEditor}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Add Chord
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Chord Sequence Section */}
+        <div className="mt-8 border-t border-gray-200 pt-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-gray-900">
+              Chord Sequence
+            </h2>
             <button
-              onClick={openNewChordEditor}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              onClick={handleSaveSequence}
+              disabled={sequenceSaving}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              Add Chord
+              {sequenceSaving ? 'Saving...' : 'Save Sequence'}
             </button>
           </div>
-        </>
-      )}
-
-      {/* Chord Sequence Section */}
-      <div className="mt-8 border-t border-gray-200 pt-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">
-            Chord Sequence
-          </h2>
-          <button
-            onClick={handleSaveSequence}
-            disabled={sequenceSaving}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {sequenceSaving ? 'Saving...' : 'Save Sequence'}
-          </button>
+          <ChordStaff
+            numerator={sequenceNumerator}
+            denominator={sequenceDenominator}
+            measuresPerLine={measuresPerLine}
+            measures={sequenceMeasures}
+            chordMap={Object.fromEntries(chords.map((c) => [c.id, c.name ?? 'Untitled']))}
+          />
         </div>
-        <ChordStaff
-          numerator={sequenceNumerator}
-          denominator={sequenceDenominator}
-          measuresPerLine={measuresPerLine}
-          measures={sequenceMeasures}
-        />
-      </div>
+      </DndContext>
 
       {/* Toast notification */}
       {toast && (

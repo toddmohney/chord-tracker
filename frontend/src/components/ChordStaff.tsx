@@ -1,3 +1,4 @@
+import { useDroppable } from '@dnd-kit/core'
 import type { SequenceMeasure, SequenceBeat } from '../types/sequence'
 
 export interface ChordStaffProps {
@@ -5,6 +6,7 @@ export interface ChordStaffProps {
   denominator: number
   measuresPerLine: number
   measures: SequenceMeasure[]
+  chordMap: Record<string, string>
 }
 
 function TimeSignature({ numerator, denominator }: { numerator: number; denominator: number }) {
@@ -16,16 +18,38 @@ function TimeSignature({ numerator, denominator }: { numerator: number; denomina
   )
 }
 
-function BeatSlot({ beat }: { beat: SequenceBeat }) {
+function BeatSlot({
+  beat,
+  measureId,
+  chordMap,
+}: {
+  beat: SequenceBeat
+  measureId: string
+  chordMap: Record<string, string>
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `beat|${measureId}|${beat.beat_position}`,
+    data: { type: 'beat', measureId, beatPosition: beat.beat_position },
+  })
+
+  const chordName = beat.chord_id ? (chordMap[beat.chord_id] ?? 'Untitled') : null
+
   return (
     <div
-      className="flex h-12 w-full items-center justify-center rounded border border-dashed border-gray-300 bg-white text-xs text-gray-400"
+      ref={setNodeRef}
+      className={`flex h-12 w-full items-center justify-center rounded border text-xs transition-colors ${
+        isOver
+          ? 'border-blue-400 bg-blue-50'
+          : beat.chord_id
+            ? 'border-gray-300 bg-white'
+            : 'border-dashed border-gray-300 bg-white text-gray-400'
+      }`}
       aria-label={`Beat ${beat.beat_position}`}
     >
-      {beat.chord_id === null ? (
+      {chordName === null ? (
         <span className="select-none opacity-50">—</span>
       ) : (
-        <span className="font-medium text-gray-800">{beat.chord_id}</span>
+        <span className="font-medium text-gray-800">{chordName}</span>
       )}
     </div>
   )
@@ -39,7 +63,13 @@ function Barline({ bold = false }: { bold?: boolean }) {
   )
 }
 
-function Measure({ measure }: { measure: SequenceMeasure }) {
+function Measure({
+  measure,
+  chordMap,
+}: {
+  measure: SequenceMeasure
+  chordMap: Record<string, string>
+}) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1 px-1">
       {/* Ending number bracket */}
@@ -51,7 +81,7 @@ function Measure({ measure }: { measure: SequenceMeasure }) {
       {/* Beat slots */}
       <div className="flex gap-1">
         {measure.beats.map((beat) => (
-          <BeatSlot key={beat.beat_position} beat={beat} />
+          <BeatSlot key={beat.beat_position} beat={beat} measureId={measure.id} chordMap={chordMap} />
         ))}
       </div>
     </div>
@@ -63,6 +93,7 @@ export default function ChordStaff({
   denominator,
   measuresPerLine,
   measures,
+  chordMap,
 }: ChordStaffProps) {
   // Split measures into lines
   const lines: SequenceMeasure[][] = []
@@ -87,7 +118,7 @@ export default function ChordStaff({
 
           {lineMeasures.map((measure, measureIndex) => (
             <div key={measure.id} className="flex min-w-0 flex-1 items-stretch">
-              <Measure measure={measure} />
+              <Measure measure={measure} chordMap={chordMap} />
               {/* Barline after each measure */}
               {measure.repeat_end ? (
                 <>
