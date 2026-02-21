@@ -20,6 +20,12 @@ import { CSS } from '@dnd-kit/utilities'
 import { apiClient } from '../api/client'
 import AppLayout from '../components/AppLayout'
 import GuitarNeck, { type Marker } from '../components/GuitarNeck'
+import ChordStaff from '../components/ChordStaff'
+import {
+  buildDefaultMeasures,
+  type SequenceApiResponse,
+  type SequenceMeasure,
+} from '../types/sequence'
 import { chordTemplates } from '../data/chordTemplates'
 
 interface Song {
@@ -237,6 +243,23 @@ export default function SongDetail() {
   const [templateBrowserOpen, setTemplateBrowserOpen] = useState(false)
   const [templateSearch, setTemplateSearch] = useState('')
 
+  // Sequence state (initialized with 4 empty measures in 4/4)
+  const [sequenceNumerator, setSequenceNumerator] = useState(4)
+  const [sequenceDenominator, setSequenceDenominator] = useState(4)
+  const [measuresPerLine, setMeasuresPerLine] = useState(4)
+  const [sequenceMeasures, setSequenceMeasures] = useState<SequenceMeasure[]>(
+    () => buildDefaultMeasures(4, 4),
+  )
+  const [sequenceExists, setSequenceExists] = useState(false)
+  const [sequenceSaving, setSequenceSaving] = useState(false)
+  const [pendingNumerator, setPendingNumerator] = useState<number | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  function showToast(message: string, type: 'success' | 'error') {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, {
@@ -259,6 +282,37 @@ export default function SongDetail() {
     setChords(data)
   }, [id])
 
+  const fetchSequence = useCallback(async () => {
+    const response = await apiClient(`/api/songs/${id}/sequence`)
+    if (response.status === 404) {
+      // No sequence yet — keep defaults
+      return
+    }
+    if (!response.ok) throw new Error('Failed to fetch sequence')
+    const data: SequenceApiResponse = await response.json()
+    setSequenceNumerator(data.time_signature_numerator)
+    setSequenceDenominator(data.time_signature_denominator)
+    setMeasuresPerLine(data.measures_per_line)
+    setSequenceExists(true)
+    setSequenceMeasures(
+      data.measures
+        .sort((a, b) => a.position - b.position)
+        .map((m) => ({
+          id: m.id,
+          position: m.position,
+          repeat_start: m.repeat_start,
+          repeat_end: m.repeat_end,
+          ending_number: m.ending_number,
+          beats: m.beats
+            .sort((a, b) => a.beat_position - b.beat_position)
+            .map((b) => ({
+              beat_position: b.beat_position,
+              chord_id: b.chord_id,
+            })),
+        })),
+    )
+  }, [id])
+
   useEffect(() => {
     async function load() {
       try {
@@ -271,6 +325,7 @@ export default function SongDetail() {
           setProject(projectData)
         }
         await fetchChords()
+        await fetchSequence()
       } catch {
         setError('Failed to load song')
       } finally {
@@ -278,7 +333,148 @@ export default function SongDetail() {
       }
     }
     load()
-  }, [fetchSong, fetchChords])
+  }, [fetchSong, fetchChords, fetchSequence])
+
+  async function handleSaveSequence() {
+    setSequenceSaving(true)
+    try {
+      const payload = {
+        time_signature_numerator: sequenceNumerator,
+        time_signature_denominator: sequenceDenominator,
+        measures_per_line: measuresPerLine,
+        measures: sequenceMeasures.map((m, index) => ({
+          position: index,
+          repeat_start: m.repeat_start,
+          repeat_end: m.repeat_end,
+          ending_number: m.ending_number,
+          beats: m.beats.map((b) => ({
+            beat_position: b.beat_position,
+            chord_id: b.chord_id,
+          })),
+        })),
+      }
+
+      let response = await apiClient(`/api/songs/${id}/sequence`, {
+        method: 'PUT',
+        body: payload,
+      })
+
+      if (response.status === 404) {
+        // Sequence doesn't exist yet — create it first
+        const createResponse = await apiClient(`/api/songs/${id}/sequence`, {
+          method: 'POST',
+          body: {
+            time_signature_numerator: sequenceNumerator,
+            time_signature_denominator: sequenceDenominator,
+            measures_per_line: measuresPerLine,
+          },
+        })
+        if (!createResponse.ok) throw new Error('Failed to create sequence')
+        setSequenceExists(true)
+        response = await apiClient(`/api/songs/${id}/sequence`, {
+          method: 'PUT',
+          body: payload,
+        })
+      }
+
+      if (!response.ok) throw new Error('Failed to save sequence')
+      if (!sequenceExists) setSequenceExists(true)
+      showToast('Sequence saved', 'success')
+    } catch {
+      showToast('Failed to save sequence', 'error')
+    } finally {
+      setSequenceSaving(false)
+    }
+  }
+
+  function handleAddMeasure() {
+    setSequenceMeasures((prev) => {
+      const newMeasure: SequenceMeasure = {
+        id: crypto.randomUUID(),
+        position: prev.length,
+        repeat_start: false,
+        repeat_end: false,
+        ending_number: null,
+        beats: Array.from({ length: sequenceNumerator }, (_, i) => ({
+          beat_position: i + 1,
+          chord_id: null,
+        })),
+      }
+      return [...prev, newMeasure]
+    })
+  }
+
+  function handleRemoveMeasure(measureId: string) {
+    setSequenceMeasures((prev) =>
+      prev
+        .filter((m) => m.id !== measureId)
+        .map((m, index) => ({ ...m, position: index })),
+    )
+  }
+
+  function handleToggleRepeatStart(measureId: string) {
+    setSequenceMeasures((prev) =>
+      prev.map((m) => (m.id === measureId ? { ...m, repeat_start: !m.repeat_start } : m)),
+    )
+  }
+
+  function handleToggleRepeatEnd(measureId: string) {
+    setSequenceMeasures((prev) =>
+      prev.map((m) => (m.id === measureId ? { ...m, repeat_end: !m.repeat_end } : m)),
+    )
+  }
+
+  function handleSetEndingNumber(measureId: string, endingNumber: number | null) {
+    setSequenceMeasures((prev) =>
+      prev.map((m) => (m.id === measureId ? { ...m, ending_number: endingNumber } : m)),
+    )
+  }
+
+  function handleRemoveBeat(measureId: string, beatPosition: number) {
+    setSequenceMeasures((prev) =>
+      prev.map((m) => {
+        if (m.id !== measureId) return m
+        return {
+          ...m,
+          beats: m.beats.map((b) =>
+            b.beat_position === beatPosition ? { ...b, chord_id: null } : b,
+          ),
+        }
+      }),
+    )
+  }
+
+  function applyNumeratorChange(newNumerator: number) {
+    setSequenceNumerator(newNumerator)
+    setSequenceMeasures((prev) =>
+      prev.map((m) => {
+        const trimmed = m.beats.filter((b) => b.beat_position <= newNumerator)
+        const existing = new Set(trimmed.map((b) => b.beat_position))
+        const extended = [...trimmed]
+        for (let pos = 1; pos <= newNumerator; pos++) {
+          if (!existing.has(pos)) extended.push({ beat_position: pos, chord_id: null })
+        }
+        extended.sort((a, b) => a.beat_position - b.beat_position)
+        return { ...m, beats: extended }
+      }),
+    )
+    setPendingNumerator(null)
+  }
+
+  function handleNumeratorChange(newNumerator: number) {
+    const wouldLoseData = sequenceMeasures.some((m) =>
+      m.beats.some((b) => b.beat_position > newNumerator && b.chord_id !== null),
+    )
+    if (wouldLoseData) {
+      setPendingNumerator(newNumerator)
+    } else {
+      applyNumeratorChange(newNumerator)
+    }
+  }
+
+  function handleDenominatorChange(newDenominator: number) {
+    setSequenceDenominator(newDenominator)
+  }
 
   async function persistReorder(reorderedChords: Chord[]) {
     const response = await apiClient(`/api/songs/${id}/chords/reorder`, {
@@ -293,10 +489,33 @@ export default function SongDetail() {
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
-    if (!over || active.id === over.id) return
+    if (!over) return
 
+    // Check if dropped on a beat slot
+    const beatData = over.data.current as { type?: string; measureId?: string; beatPosition?: number }
+    if (beatData?.type === 'beat' && beatData.measureId && beatData.beatPosition !== undefined) {
+      const chordId = String(active.id)
+      if (chords.some((c) => c.id === chordId)) {
+        setSequenceMeasures((prev) =>
+          prev.map((m) => {
+            if (m.id !== beatData.measureId) return m
+            return {
+              ...m,
+              beats: m.beats.map((b) =>
+                b.beat_position === beatData.beatPosition ? { ...b, chord_id: chordId } : b,
+              ),
+            }
+          }),
+        )
+      }
+      return
+    }
+
+    // Sortable chord reorder
+    if (active.id === over.id) return
     const oldIndex = chords.findIndex((c) => c.id === active.id)
     const newIndex = chords.findIndex((c) => c.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
     const reordered = arrayMove(chords, oldIndex, newIndex)
     setChords(reordered)
     await persistReorder(reordered)
@@ -602,26 +821,26 @@ export default function SongDetail() {
         </div>
       )}
 
-      {chords.length === 0 && !editorOpen ? (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 p-8 text-center sm:p-12">
-          <p className="text-gray-500">No chords yet.</p>
-          <p className="mt-1 text-sm text-gray-400">
-            Add your first chord to start building your progression.
-          </p>
-          <button
-            onClick={openNewChordEditor}
-            className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            Add Chord
-          </button>
-        </div>
-      ) : (
-        <>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        {chords.length === 0 && !editorOpen ? (
+          <div className="rounded-lg border-2 border-dashed border-gray-300 p-8 text-center sm:p-12">
+            <p className="text-gray-500">No chords yet.</p>
+            <p className="mt-1 text-sm text-gray-400">
+              Add your first chord to start building your progression.
+            </p>
+            <button
+              onClick={openNewChordEditor}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Add Chord
+            </button>
+          </div>
+        ) : (
+          <>
             <SortableContext
               items={chords.map((c) => c.id)}
               strategy={verticalListSortingStrategy}
@@ -641,16 +860,111 @@ export default function SongDetail() {
                 ))}
               </div>
             </SortableContext>
-          </DndContext>
-          <div className="mt-6">
-            <button
-              onClick={openNewChordEditor}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              Add Chord
-            </button>
+            <div className="mt-6">
+              <button
+                onClick={openNewChordEditor}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Add Chord
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Chord Sequence Section */}
+        <div className="mt-8 border-t border-gray-200 pt-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-gray-900">
+              Chord Sequence
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleAddMeasure}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                + Add Measure
+              </button>
+              <button
+                onClick={handleSaveSequence}
+                disabled={sequenceSaving}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {sequenceSaving ? 'Saving...' : 'Save Sequence'}
+              </button>
+            </div>
           </div>
-        </>
+          {/* Time signature selector */}
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Time Signature:</span>
+            <select
+              value={sequenceNumerator}
+              onChange={(e) => handleNumeratorChange(Number(e.target.value))}
+              className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              {Array.from({ length: 11 }, (_, i) => i + 2).map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span className="text-sm font-medium text-gray-500">/</span>
+            <select
+              value={sequenceDenominator}
+              onChange={(e) => handleDenominatorChange(Number(e.target.value))}
+              className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              {[2, 4, 8, 16].map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+          {/* Confirmation dialog when reducing numerator would lose beat data */}
+          {pendingNumerator !== null && (
+            <div className="mb-4 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+              <p className="mb-2">
+                Changing to {pendingNumerator}/{sequenceDenominator} will remove beats beyond position{' '}
+                {pendingNumerator}. Any chords in those beats will be lost.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyNumeratorChange(pendingNumerator)}
+                  className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingNumerator(null)}
+                  className="rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          <ChordStaff
+            numerator={sequenceNumerator}
+            denominator={sequenceDenominator}
+            measuresPerLine={measuresPerLine}
+            measures={sequenceMeasures}
+            chordMap={Object.fromEntries(chords.map((c) => [c.id, c.name ?? 'Untitled']))}
+            onRemoveBeat={handleRemoveBeat}
+            onRemoveMeasure={handleRemoveMeasure}
+            onToggleRepeatStart={handleToggleRepeatStart}
+            onToggleRepeatEnd={handleToggleRepeatEnd}
+            onSetEndingNumber={handleSetEndingNumber}
+          />
+        </div>
+      </DndContext>
+
+      {/* Toast notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-4 right-4 z-50 rounded-md px-4 py-2 text-sm font-medium text-white shadow-lg ${
+            toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+          }`}
+        >
+          {toast.message}
+        </div>
       )}
     </AppLayout>
   )

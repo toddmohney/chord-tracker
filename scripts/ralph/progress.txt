@@ -1,127 +1,155 @@
-# Ralph Progress Log
-Started: Mon Feb 16 10:26:56 EST 2026
+## 2026-02-21 - US-010
+- What was implemented: Numbered ending annotations for each measure. Each measure footer now shows three small toggle buttons: "—" (none), "1.", "2.". Clicking an active ending number deselects it (sets to null). The bracket display above the measure was already implemented in prior iterations. `handleSetEndingNumber` added to `SongDetail.tsx` and wired to `ChordStaff` via the new `onSetEndingNumber` prop. Ending number state is persisted via the existing Save Sequence mechanism (already included `ending_number` in payload).
+- Files changed:
+  - `frontend/src/components/ChordStaff.tsx` — added `onSetEndingNumber` to `ChordStaffProps` and `Measure` props; added ending number selector buttons (None/1./2.) in `Measure` footer between repeat toggles
+  - `frontend/src/pages/SongDetail.tsx` — added `handleSetEndingNumber` function; passed `onSetEndingNumber` to `ChordStaff`
+- **Learnings for future iterations:**
+  - `ending_number` was already wired into save payload and bracket display from earlier stories — only the setter UI was missing
+  - Toggling logic: clicking the active value sets it to null (deselects); clicking an inactive value sets it (replaces any existing)
+  - The `([null, 1, 2] as (number | null)[]).map(...)` pattern works well for typed nullable selectors in TypeScript
+  - Browser verification not done (no browser tool) — manual check recommended
+---
+
+## 2026-02-21 - US-009
+- What was implemented: Repeat barline annotations for chord staff. Each measure has `|:` (repeat start) and `:|` (repeat end) toggle buttons below the beat slots. Active toggles render as filled dark buttons. The staff rendering displays proper `|:` and `:|` barlines (with double bar lines and dots). Combined `:|:` barlines render when adjacent measures have repeat-end + repeat-start respectively. State is persisted via the existing Save Sequence mechanism.
+- Files changed:
+  - `frontend/src/components/ChordStaff.tsx` — added `onToggleRepeatStart`/`onToggleRepeatEnd` props; added `RepeatDots` component; added toggle buttons in `Measure` footer; updated barline logic in `ChordStaff` to render `|:`, `:|`, and `:|:` barlines
+  - `frontend/src/pages/SongDetail.tsx` — added `handleToggleRepeatStart` and `handleToggleRepeatEnd` handlers; passed them to `ChordStaff`
+- **Learnings for future iterations:**
+  - `repeat_start` and `repeat_end` fields already exist in `SequenceMeasure` type and backend — no schema changes needed
+  - Barline rendering logic: opening barline of each line checks `lineMeasures[0]?.repeat_start`; barline after each measure checks `measure.repeat_end` and `nextMeasure?.repeat_start`
+  - `RepeatDots` uses `self-stretch flex-col justify-center` to vertically center dots in the flex row
+  - Standard `|:` = thin+bold+dots; `:|` = dots+bold+thin; `:|:` = dots+bold+thin+bold+dots
+  - Toggle button pattern: `font-mono font-bold` for musical symbol rendering; active state uses `bg-gray-700 text-white`
+  - Browser verification not done (no browser tool) — manual check recommended
 ---
 
 ## Codebase Patterns
-- Backend uses SQLAlchemy 2.0+ with `Mapped` and `mapped_column` style
-- Pydantic schemas: `Create` has defaults, `Update` has all optional fields, `Response` has `from_attributes`
-- Alembic migrations use `collections.abc.Sequence`, import style: `from alembic import op`
-- Router manually maps schema fields to model constructor (no `**data.model_dump()`)
-- Virtual env at `backend/.venv`; run tools with `.venv/bin/python`, `.venv/bin/ruff`, `.venv/bin/pytest`
-- Ruff config in pyproject.toml: line-length 100, selects E/F/I/N/W/UP
-- All 79 tests are async with `asyncio_mode = "auto"`
-- Frontend: React 19 + TypeScript + Vite + Tailwind CSS v4, no frontend test suite
-- GuitarNeck is a stateless SVG component; parent owns marker state, component calls back via `onMarkerToggle`
-- GuitarNeck uses visual fret positions internally (1..fretCount) and maps to absolute fret via `startingFret` offset
-
+- When adding a new drop target type alongside existing sortable DnD, use a single DndContext wrapping both sections; distinguish drops via `over.data.current?.type` (useDroppable `data` prop)
+- Beat slot droppable IDs use `|` as separator (e.g., `beat|${measureId}|${beatPosition}`) to avoid UUID hyphen collisions when parsing
+- In handleDragEnd: check `over.data.current?.type === 'beat'` first, then fall through to sortable reorder; guard with `if (oldIndex === -1 || newIndex === -1) return` to avoid spurious reorders when dropping on non-chord targets
+- Frontend: React 19 + TypeScript (strict: noUnusedLocals, noUnusedParameters) + Vite + Tailwind CSS 4
+- Frontend lint rule `react-refresh/only-export-components` requires non-component exports (types, utils) to live in separate files (e.g., `src/types/`)
+- Frontend typecheck: `npx tsc -b --noEmit` from `frontend/` dir; lint: `npm run lint`
+- Backend uses SQLAlchemy 2.0+ async with `Mapped` type hints and `mapped_column`
+- All models use `UUID(as_uuid=True)` primary keys with `default=uuid.uuid4`
+- Timestamps: `DateTime(timezone=True)` with `server_default=func.now()` and `onupdate=func.now()` for `updated_at`
+- Foreign keys use `ondelete="CASCADE"` pattern with `index=True`
+- Relationships use `back_populates` (bidirectional) with `cascade="all, delete-orphan"` on parent side
+- Alembic migrations use `postgresql.UUID(as_uuid=True)` in migration files (not just `sa.UUID`)
+- Tests run via `.venv/bin/pytest tests/ -x -q` from backend directory
+- Ruff linter at `.venv/bin/ruff`, line length 100
+- No mypy installed; typecheck is implied via ruff + Python import verification
+- SQLAlchemy `default=uuid.uuid4` on primary keys runs at INSERT time, NOT at Python object construction — `obj.id` is None until flushed/committed. Explicitly pass `id=uuid.uuid4()` when you need the id before inserting (e.g., to set a FK on a related object in the same batch)
+- Use `selectinload(Parent.children).selectinload(Child.grandchildren)` for eager loading nested relationships in async SQLAlchemy (avoids MissingGreenlet errors from lazy loads)
+- For bulk DELETE+recreate in PUT endpoints: delete child records first (beats), then parent (measures) using `db.execute(delete(Model).where(...))` to work in both SQLite (tests) and PostgreSQL (production)
 ---
 
-## 2026-02-16 - US-001
-- What was implemented: Added `starting_fret` integer field (default 0) to the Chord model, Pydantic schemas (ChordCreate, ChordUpdate, ChordResponse), and API router (create + update endpoints)
-- Created Alembic migration `851f7f6990f1` with `server_default='0'` so existing rows get the default
-- Files changed:
-  - `backend/models/chord.py` - Added `starting_fret` mapped column
-  - `backend/schemas/chord.py` - Added `starting_fret` to all three schemas
-  - `backend/routers/chords.py` - Wired `starting_fret` into create and update handlers
-  - `backend/alembic/versions/851f7f6990f1_add_starting_fret_to_chords.py` - New migration
-- **Learnings for future iterations:**
-  - Alembic autogenerate template doesn't match project lint rules; needs manual cleanup (imports, string style, line length)
-  - Router maps fields explicitly — when adding a new model field, must update both create_chord and update_chord in the router
-  - Migration needs `server_default` for NOT NULL columns to handle existing rows
+# Ralph Progress Log
+Started: Sat Feb 21 10:55:30 EST 2026
 ---
 
-## 2026-02-16 - US-002
-- What was implemented: Added `startingFret` optional prop (default 0) to GuitarNeck component with full offset support
-- Changes:
-  - Fret labels display absolute fret numbers (`startingFret + visualFret`)
-  - Nut bar conditionally renders: thick bar when `startingFret === 0`, normal fret line otherwise
-  - Tap targets emit absolute fret numbers (`startingFret + visualPosition`)
-  - `hasMarker` checks against absolute fret values so markers render at correct visual position
-  - Fret 0 (open string) tap targets only render when `startingFret === 0`
-  - Out-of-range markers are naturally excluded since the rendering loop only covers the visible window
+## 2026-02-21 - US-001
+- What was implemented: Created three SQLAlchemy models (`Sequence`, `SequenceMeasure`, `SequenceBeat`) in `backend/models/sequence.py`. Added `sequence` back-reference to `Song` model. Created Alembic migration `c3f2a1b4d5e6_add_sequence_tables.py`.
 - Files changed:
-  - `frontend/src/components/GuitarNeck.tsx` - Added `startingFret` prop, updated rendering logic
+  - `backend/models/sequence.py` (new)
+  - `backend/models/__init__.py` (added Sequence, SequenceMeasure, SequenceBeat exports)
+  - `backend/models/song.py` (added `sequence` relationship with `uselist=False`)
+  - `backend/alembic/versions/c3f2a1b4d5e6_add_sequence_tables.py` (new)
 - **Learnings for future iterations:**
-  - No frontend test suite exists — quality checks are typecheck only (`npx tsc --noEmit`)
-  - The component iterates visual fret positions (1..fretCount) and computes absolute fret as `startingFret + visualFret`
-  - Markers outside the visible fret window don't need explicit filtering — the rendering loop only checks positions within the window
-  - When `startingFret > 0`, there's no "open string" concept — the fret-0 tap targets and nut bar are both hidden
+  - The venv is at `backend/.venv/` — use `.venv/bin/pytest`, `.venv/bin/ruff`, `.venv/bin/alembic`
+  - Migration files must use `postgresql.UUID(as_uuid=True)` from `sqlalchemy.dialects`, not just `sa.UUID`
+  - `sequence_beat.chord_id` uses `ondelete="SET NULL"` (not CASCADE) since removing a chord shouldn't destroy beat slots
+  - `UniqueConstraint` in `__table_args__` must be a tuple — trailing comma required for single-element tuple
+  - Ruff line length is 100; watch for long `__table_args__` lines
 ---
 
-## 2026-02-16 - US-003
-- What was implemented: Added starting fret control to the chord editor UI in SongDetail.tsx
-- Changes:
-  - Added `starting_fret` field to the frontend `Chord` interface
-  - Added `editorStartingFret` state to manage the value in the editor
-  - Added increment (+) and decrement (−) buttons with min 0 / max 19 bounds
-  - Displays current starting fret value as "Starting fret: N" label
-  - Passes `startingFret` to the interactive `GuitarNeck` in the editor
-  - Includes `starting_fret` in both create (POST) and update (PUT) API calls
-  - Pre-populates starting fret when editing an existing chord
-  - Resets starting fret to 0 when opening a new chord or canceling
+## 2026-02-21 - US-002
+- What was implemented: REST API endpoints for sequence CRUD (`GET`, `POST`, `PUT`, `DELETE /api/songs/{song_id}/sequence`). Pydantic schemas for request/response. 17 new tests covering all endpoints and auth scenarios.
 - Files changed:
-  - `frontend/src/pages/SongDetail.tsx` - All UI and state changes for starting fret control
+  - `backend/schemas/sequence.py` (new) — SequenceCreate, SequenceUpdate, SequenceResponse, nested measure/beat schemas
+  - `backend/routers/sequence.py` (new) — 4 endpoints with auth + ownership checks
+  - `backend/main.py` (added sequence_router)
+  - `backend/tests/test_sequence.py` (new) — 17 tests
 - **Learnings for future iterations:**
-  - All editor state (markers, name, starting fret) needs to be reset in both `openNewChordEditor` and `handleCancel`
-  - The editor modal is inline in SongDetail.tsx, not a separate component — all editor state lives as useState hooks in the SongDetail component
-  - Template browser also renders GuitarNeck previews — future stories may need to pass `startingFret` there too
+  - SQLAlchemy `default=uuid.uuid4` runs at INSERT time, not Python construction — pass `id=uuid.uuid4()` explicitly when the id is needed before flush
+  - For bulk DELETE+recreate in PUT: delete child records (beats) first with `db.execute(delete(...))`, then parent (measures) — required for SQLite FK compatibility in tests
+  - `selectinload(Sequence.measures).selectinload(SequenceMeasure.beats)` chains work correctly for nested eager loading
+  - When deleting with `db.delete(sequence)` and ORM cascade, load the full relationship tree with `selectinload` first so SQLAlchemy knows what to cascade-delete in SQLite
 ---
 
-## 2026-02-16 - US-004
-- What was implemented: Added `starting_fret` field to chord templates and wired it through the template browser UI
-- Changes:
-  - Added `starting_fret: number` to `ChordTemplate` interface
-  - Added `starting_fret: 0` to all existing templates (A, Am, C, D, Dm, E, Em, F, G)
-  - Set `starting_fret: 2` for B and Bm templates (barre chord at 2nd fret)
-  - B and Bm marker fret values unchanged — they were already absolute fret positions
-  - Template selection handler now sets `editorStartingFret` from `template.starting_fret`
-  - Template preview GuitarNeck now receives `startingFret` prop for correct rendering
+## 2026-02-21 - US-004
+- What was implemented: On page load, fetches existing sequence via `GET /api/songs/{id}/sequence`; if 404 initializes with 4 empty measures in 4/4. "Save Sequence" button sends full state to `PUT /api/songs/{id}/sequence`; if 404 (no sequence yet) first POSTs to create then PUTs. Success/error toasts auto-dismiss after 3 seconds.
 - Files changed:
-  - `frontend/src/data/chordTemplates.ts` - Added `starting_fret` to interface and all template objects
-  - `frontend/src/pages/SongDetail.tsx` - Updated template selection handler and preview rendering
+  - `frontend/src/types/sequence.ts` (added `SequenceBeatApiResponse`, `SequenceMeasureApiResponse`, `SequenceApiResponse` types)
+  - `frontend/src/pages/SongDetail.tsx` (mutable sequence state, `fetchSequence` callback, `handleSaveSequence`, toast state, Save Sequence button, toast UI)
 - **Learnings for future iterations:**
-  - Template marker fret values are absolute (not relative to starting_fret) — the GuitarNeck component handles the offset internally
-  - The `ChordTemplate` interface doesn't use optional fields; all fields are required
-  - Template selection sets three pieces of editor state: markers, name, and starting fret
+  - Toast pattern: `useState<{ message: string; type: 'success' | 'error' } | null>(null)` + `setTimeout(() => setToast(null), 3000)` — simple inline approach without a library
+  - PUT before POST pattern: try PUT first, if 404 then POST to create + PUT again — avoids tracking `sequenceExists` before the first load
+  - Sort API response arrays by position/beat_position before mapping — backend may not guarantee order
+  - TypeScript strict mode: adding setters to useState is fine as long as all setters are actually used (e.g., in fetchSequence callbacks)
+  - `SequenceApiResponse` placed in `src/types/sequence.ts` (not the component file) to avoid ESLint `only-export-components` issues
 ---
 
-## 2026-02-16 - US-005
-- What was implemented: Passed `startingFret` from chord's `starting_fret` API field to the GuitarNeck component in the SortableChordCard mini preview
+## 2026-02-21 - US-005
+- What was implemented: Each chord card in the chord list is now a drag source (already via `useSortable`). Each beat slot in `ChordStaff` uses `useDroppable` from `@dnd-kit/core`. Dragging a chord onto a beat slot sets that beat's `chord_id` and displays the chord name. Slots highlight blue on hover. Single `DndContext` wraps both chord list and staff. `chordMap` passed to `ChordStaff` for name display.
 - Files changed:
-  - `frontend/src/pages/SongDetail.tsx` - Added `startingFret={chord.starting_fret ?? 0}` to the card preview GuitarNeck
+  - `frontend/src/components/ChordStaff.tsx` — added `useDroppable` to `BeatSlot`, `chordMap` prop for name lookup, `measureId` prop threading, `isOver` visual highlight
+  - `frontend/src/pages/SongDetail.tsx` — lifted `DndContext` to wrap both chord list and staff, updated `handleDragEnd` to handle beat slot drops, passes `chordMap` to `ChordStaff`
 - **Learnings for future iterations:**
-  - The chord card preview is in the `SortableChordCard` component (line ~207 in SongDetail.tsx)
-  - This was a one-line change — the GuitarNeck component already handles all offset logic internally
-  - The `Chord` interface already had `starting_fret` from US-003, so no interface changes were needed
+  - `useSortable` chord cards automatically act as drag sources for the shared `DndContext` — no extra `useDraggable` needed
+  - Beat slot IDs use `beat|${measureId}|${beatPosition}` with `|` separator; UUID hyphens make `-` splitting unreliable
+  - Cast `over.data.current` to `{ type?: string; measureId?: string; beatPosition?: number }` for TypeScript safety
+  - `Object.fromEntries(chords.map(...))` inline in JSX is fine for small chord lists; avoids needing `useMemo`
+  - Browser verification not done (no browser tool) — manual check recommended
 ---
 
-## 2026-02-16 - US-006
-- What was implemented: Auto-adjust starting fret when opening an existing chord in the editor
-- Logic:
-  - If chord has no markers, use the saved `starting_fret`
-  - If saved `starting_fret` already makes all markers visible within the 5-fret window, use it
-  - Otherwise, calculate: `min(non-zero fret values) - 1`, clamped to 0, then verify max fret fits
-  - Visible range check accounts for fret 0 (open string) being visible only when `startingFret === 0`
+## 2026-02-21 - US-003
+- What was implemented: `ChordStaff` component renders a music-staff-style display with time signature, barlines, multiple lines of measures, and empty beat slots (dashed outlines). Added "Chord Sequence" section below chord list on song detail page.
 - Files changed:
-  - `frontend/src/pages/SongDetail.tsx` - Updated `openEditChordEditor` with auto-adjustment logic
+  - `frontend/src/components/ChordStaff.tsx` (new) — staff display component with `TimeSignature`, `Barline`, `BeatSlot`, `Measure` sub-components
+  - `frontend/src/types/sequence.ts` (new) — `SequenceBeat`, `SequenceMeasure` interfaces + `buildDefaultMeasures` utility
+  - `frontend/src/pages/SongDetail.tsx` (updated) — imported ChordStaff, added sequence state (4 measures, 4/4), rendered Chord Sequence section below chord list
 - **Learnings for future iterations:**
-  - The editor fretCount is hardcoded to 5 in multiple places — if this changes, the auto-adjust logic needs updating
-  - The visible fret range is `[startingFret + 1, startingFret + fretCount]` for fretted notes, plus fret 0 only when `startingFret === 0`
-  - Need to handle edge case where all markers are on fret 0 (open strings) — `Math.min(...[])` returns Infinity, so filter for `f > 0` and guard with `Number.isFinite`
+  - ESLint rule `react-refresh/only-export-components` forbids exporting non-component values (types, functions) from component files — put shared types/utils in `src/types/` or `src/utils/`
+  - Frontend typecheck command: `npx tsc -b --noEmit` (run from `frontend/` dir); no separate `typecheck` npm script
+  - TypeScript strict `noUnusedLocals` means unused state setters (e.g., `setSequenceMeasures`) must be removed from destructuring until actually needed
+  - Browser verification was not done (no browser tool available) — manual check recommended
 ---
 
-## 2026-02-16 - US-007
-- What was implemented: Added out-of-range marker indicators directly in the GuitarNeck component
-- Logic:
-  - Computes visible fret range: `visibleMin` is 0 when `startingFret === 0`, otherwise `startingFret + 1`; `visibleMax` is `startingFret + fretCount`
-  - Filters markers below `visibleMin` and above `visibleMax`
-  - Renders text + arrow indicators in the SVG padding areas (above fretboard for "below" markers, below fretboard for "above" markers)
-  - Uses amber color (#d97706 / fill-amber-600) for visual distinction
-  - Shows count with singular/plural text (e.g., "1 marker below" / "2 markers above")
+## 2026-02-21 - US-006
+- What was implemented: Clicking a filled beat slot now opens a small popover with a "Remove" option. Selecting "Remove" clears the chord from that slot (sets chord_id to null), reverting it to the empty dashed placeholder. A fixed backdrop div closes the popover when clicking outside.
 - Files changed:
-  - `frontend/src/components/GuitarNeck.tsx` - Added out-of-range marker computation and indicator rendering
+  - `frontend/src/components/ChordStaff.tsx` — added `useState` import; `BeatSlot` now has `showMenu` state + popover UI + backdrop; `Measure` and `ChordStaff` thread `onRemoveBeat` callback
+  - `frontend/src/pages/SongDetail.tsx` — added `handleRemoveBeat` function; passes `onRemoveBeat` to `ChordStaff`
 - **Learnings for future iterations:**
-  - Indicators are built into GuitarNeck itself, so they automatically appear everywhere the component is used (editor, card previews, template previews) — no per-usage wiring needed
-  - The SVG padding areas (top: 40px, bottom: 20px) provide enough space for small indicator text without changing the viewBox
-  - The visible range depends on `startingFret`: when 0, fret 0 (open string) is visible; otherwise the range starts at `startingFret + 1`
+  - Popover pattern: `useState<boolean>` + `fixed inset-0 z-10` backdrop div + `absolute` popover with `z-20`; toggling on click, closing on backdrop click
+  - Beat slot click only triggers menu when `beat.chord_id` is non-null; empty slots don't react to click
+  - Filled beat slots get `cursor-pointer hover:border-gray-400` to signal interactivity
+  - Wrapping `BeatSlot` content in a `relative flex-1` outer div allows absolute popover positioning while preserving flex layout in the measure's `flex gap-1` container
+  - Browser verification not done (no browser tool) — manual check recommended
+---
+
+## 2026-02-21 - US-008
+- What was implemented: Time signature selector (numerator 2–12, denominator 2/4/8/16) displayed above the staff. Changing the numerator immediately updates beat count in every measure (adds empty beats when increasing, trims when decreasing). If decreasing numerator would lose chords, shows inline confirmation dialog before applying. Denominator change updates display only. Both values persisted on Save Sequence.
+- Files changed:
+  - `frontend/src/pages/SongDetail.tsx` — added `pendingNumerator` state, `applyNumeratorChange`, `handleNumeratorChange`, `handleDenominatorChange` functions; added time signature selector UI and confirmation dialog above ChordStaff
+- **Learnings for future iterations:**
+  - When expanding beats (numerator increases), build from existing beats + fill gaps by position; sort by beat_position after
+  - Confirmation dialog pattern: `useState<number | null>` for the pending value; show dialog when set, apply or cancel buttons reset it to null
+  - Denominator change is pure display — no beat count changes needed (beat count is determined by numerator)
+  - Browser verification not done (no browser tool) — manual check recommended
+---
+
+## 2026-02-21 - US-007
+- What was implemented: '+ Add Measure' button in the Chord Sequence header appends a new empty measure (using `crypto.randomUUID()` for client-side id). Each measure now has a `×` remove button; removing an empty measure removes it immediately; removing a measure with chords shows inline confirmation dialog with message 'This will remove all chords in this measure'. Remaining measures are re-positioned 0-based after removal. Staff lines reflow automatically since the existing `slice(i, i + measuresPerLine)` loop naturally handles new measure count.
+- Files changed:
+  - `frontend/src/components/ChordStaff.tsx` — added `onRemoveMeasure` to `ChordStaffProps` and `Measure` props; added `confirmingRemove` state + `×` button + inline confirmation UI to `Measure`
+  - `frontend/src/pages/SongDetail.tsx` — added `handleAddMeasure` and `handleRemoveMeasure` functions; added '+ Add Measure' button in section header; passed `onRemoveMeasure` to `ChordStaff`
+- **Learnings for future iterations:**
+  - `crypto.randomUUID()` is available in modern browsers and typed in TypeScript lib.dom.d.ts — use it for generating client-side temporary IDs
+  - Inline confirmation pattern (like `confirmingDelete` in SortableChordCard) works well for per-measure remove buttons; avoids modal complexity
+  - Staff line reflow is automatic — the `measures.slice(i, i + measuresPerLine)` loop in `ChordStaff` handles any measure count without additional logic
+  - Re-positioning after removal: `.filter(...).map((m, index) => ({ ...m, position: index }))` keeps positions 0-based and contiguous
+  - Browser verification not done (no browser tool) — manual check recommended
 ---

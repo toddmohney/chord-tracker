@@ -30,3 +30,6 @@ class Song(Base):
     chords: Mapped[list["Chord"]] = relationship(  # noqa: F821
         back_populates="song", cascade="all, delete-orphan"
     )
+    sequence: Mapped["Sequence | None"] = relationship(  # noqa: F821
+        back_populates="song", cascade="all, delete-orphan", uselist=False
+    )

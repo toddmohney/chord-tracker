@@ -1,0 +1,18 @@
+# Ralph Progress Log
+Started: Fri Feb 21 2026
+---
+
+## Codebase Patterns
+- Backend uses SQLAlchemy 2.0+ with `Mapped` and `mapped_column` style
+- Pydantic schemas: `Create` has defaults, `Update` has all optional fields, `Response` has `from_attributes`
+- Alembic migrations use `collections.abc.Sequence`, import style: `from alembic import op`
+- Router manually maps schema fields to model constructor (no `**data.model_dump()`)
+- Virtual env at `backend/.venv`; run tools with `.venv/bin/python`, `.venv/bin/ruff`, `.venv/bin/pytest`
+- Ruff config in pyproject.toml: line-length 100, selects E/F/I/N/W/UP
+- All 79 tests are async with `asyncio_mode = "auto"`
+- Frontend: React 19 + TypeScript + Vite + Tailwind CSS v4, no frontend test suite
+- GuitarNeck is a stateless SVG component; parent owns marker state, component calls back via `onMarkerToggle`
+- GuitarNeck uses visual fret positions internally (1..fretCount) and maps to absolute fret via `startingFret` offset
+- dnd-kit is already installed for drag-and-drop
+
+---
