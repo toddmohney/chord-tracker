@@ -14,6 +14,9 @@ Started: Sat Feb 21 12:30:35 EST 2026
 - `ProjectRole` enum (owner/admin/editor/viewer) lives in `models/collaborator.py`; `check_project_access(project_id, user, db)` is in `auth/project_access.py`
 - For song/chord endpoints (accessed by ID, not project_id), load the resource first then call `check_project_access(song.project_id, ...)` directly — can't use FastAPI Depends for these
 - `ProjectResponse.my_role` is populated explicitly in each endpoint using `.model_copy(update={"my_role": role})` — ORM objects don't carry this field
+- Frontend: use `npx tsc --noEmit` for typecheck (no "typecheck" script in package.json); `npm run lint` for ESLint
+- Frontend: `PendingInvitationsModal` uses `fixed inset-0 z-50` overlay pattern; loaded from Dashboard with `showInvitationsModal` state
+- When backend endpoint needs enriched data (project name, inviter email), use `selectinload` to eagerly load ORM relationships, then construct the Pydantic response manually
 
 ## 2026-02-21 - US-001
 - Created `ProjectCollaborator` SQLAlchemy model in `backend/models/collaborator.py`
@@ -93,4 +96,25 @@ Started: Sat Feb 21 12:30:35 EST 2026
   - `ProjectResponse.my_role` requires explicit `.model_copy(update={"my_role": role})` since ORM objects don't have this field
   - `get_project_access` works as a FastAPI Depends when `project_id` is a path parameter; for song/chord routes use `check_project_access` directly
   - `_EDITOR_ROLES = {owner, admin, editor}` pattern for mutation checks; `_ADMIN_ROLES = {owner, admin}` for collaborator management
+---
+
+## 2026-02-21 - US-006
+- Added `PendingInvitationResponse` Pydantic schema to `backend/schemas/collaborator.py`
+  - Includes: id, project_id, project_name, inviter_email, role, status, created_at, updated_at
+- Added `GET /collaborators/pending` endpoint to `status_router` in `backend/routers/collaborators.py`
+  - Uses `selectinload` for `project` and `inviter` relationships to eager-load related data
+  - Constructs `PendingInvitationResponse` manually from ORM object + related data
+- Added 3 new tests to `backend/tests/test_collaborators.py` (140 total, all passing)
+- Created `frontend/src/components/PendingInvitationsModal.tsx`
+  - Fetches `GET /api/collaborators/pending` on mount
+  - Shows each invitation: project name, inviter email, assigned role
+  - Accept/Decline buttons call `PATCH /api/collaborators/{id}` and remove invitation from list
+  - Dismiss button (X) closes modal without accepting/declining
+  - Hidden automatically when no pending invitations (returns null if loading or empty)
+- Updated `frontend/src/pages/Dashboard.tsx` to render `PendingInvitationsModal` (controlled by `showInvitationsModal` state)
+- **Learnings for future iterations:**
+  - Frontend typecheck: `npx tsc --noEmit` (run from frontend/ dir); no "typecheck" script in package.json
+  - `PendingInvitationsModal` auto-hides when `invitations.length === 0` — US-007 can leverage this for "close when all resolved"
+  - `selectinload` requires importing from `sqlalchemy.orm`; adds to `status_router`'s endpoint which is mounted at `/api`
+  - The modal is rendered in a React fragment alongside AppLayout in Dashboard's return, using `fixed inset-0 z-50` for overlay
 ---
