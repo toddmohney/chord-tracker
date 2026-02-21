@@ -11,6 +11,9 @@ Started: Sat Feb 21 12:30:35 EST 2026
 - Model relationships use `foreign_keys=[field]` when multiple FK columns reference same table
 - To expose routes at a different prefix, use a separate `APIRouter` variable in the same file and register with a different `app.include_router(...)` prefix in main.py
 - PATCH /collaborators/{collaborator_id} (status update) is mounted at `/api`, separate from project-scoped routes at `/api/projects`
+- `ProjectRole` enum (owner/admin/editor/viewer) lives in `models/collaborator.py`; `check_project_access(project_id, user, db)` is in `auth/project_access.py`
+- For song/chord endpoints (accessed by ID, not project_id), load the resource first then call `check_project_access(song.project_id, ...)` directly — can't use FastAPI Depends for these
+- `ProjectResponse.my_role` is populated explicitly in each endpoint using `.model_copy(update={"my_role": role})` — ORM objects don't carry this field
 
 ## 2026-02-21 - US-001
 - Created `ProjectCollaborator` SQLAlchemy model in `backend/models/collaborator.py`
@@ -68,4 +71,26 @@ Started: Sat Feb 21 12:30:35 EST 2026
   - Role update endpoint is at `/api/projects/{project_id}/collaborators/{id}` using the existing `router`
   - The `status_router` is only for the status PATCH at `/api/collaborators/{id}`
   - Admin authorization check requires both `status == accepted` AND `role == admin`
+---
+
+## 2026-02-21 - US-005
+- Added `ProjectRole` StrEnum (owner/admin/editor/viewer) to `backend/models/collaborator.py`
+- Created `backend/auth/project_access.py` with:
+  - `check_project_access(project_id, current_user, db)` — plain async function returning `(Project, ProjectRole)` or raising 403/404
+  - `get_project_access(project_id, ...)` — FastAPI Depends wrapper for project-scoped endpoints
+- Updated `schemas/project.py`: added `my_role: ProjectRole | None = None` to `ProjectResponse`
+- Updated `routers/projects.py`:
+  - `list_projects`: queries owned + accepted collaborations, returns `my_role` for each
+  - `get_project`: uses `get_project_access` Depends, returns `my_role`; accessible to all collaborators
+  - `update_project`/`delete_project`: owner-only; editors get 403
+- Updated `routers/songs.py`, `routers/chords.py`, `routers/sequence.py`:
+  - Replaced `_get_owned_*` helpers with `_get_song_with_role`/`_get_chord_with_role` returning `(resource, role)`
+  - Read endpoints (list/get): any role (owner/admin/editor/viewer)
+  - Mutate endpoints (create/update/delete): editor or above; viewer gets 403
+- Updated `routers/collaborators.py`: replaced inline owner-check logic with `check_project_access`
+- Created `backend/tests/test_rbac.py` with 17 tests covering all acceptance criteria (137 total, all passing)
+- **Learnings for future iterations:**
+  - `ProjectResponse.my_role` requires explicit `.model_copy(update={"my_role": role})` since ORM objects don't have this field
+  - `get_project_access` works as a FastAPI Depends when `project_id` is a path parameter; for song/chord routes use `check_project_access` directly
+  - `_EDITOR_ROLES = {owner, admin, editor}` pattern for mutation checks; `_ADMIN_ROLES = {owner, admin}` for collaborator management
 ---
