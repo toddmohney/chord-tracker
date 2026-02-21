@@ -15,6 +15,10 @@ class CollaboratorStatusUpdateRequest(BaseModel):
     status: CollaboratorStatus
 
 
+class CollaboratorRoleUpdateRequest(BaseModel):
+    role: CollaboratorRole
+
+
 class CollaboratorResponse(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID

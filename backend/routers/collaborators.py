@@ -12,6 +12,7 @@ from models.user import User
 from schemas.collaborator import (
     CollaboratorInviteRequest,
     CollaboratorResponse,
+    CollaboratorRoleUpdateRequest,
     CollaboratorStatusUpdateRequest,
 )
 
@@ -184,3 +185,48 @@ async def remove_collaborator(
 
     await db.delete(collab)
     await db.commit()
+
+
+@router.patch("/{project_id}/collaborators/{collaborator_id}", response_model=CollaboratorResponse)
+async def update_collaborator_role(
+    project_id: uuid.UUID,
+    collaborator_id: uuid.UUID,
+    data: CollaboratorRoleUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ProjectCollaborator:
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    # Only owner or accepted admin can change roles
+    is_owner = project.user_id == current_user.id
+    if not is_owner:
+        collab_result = await db.execute(
+            select(ProjectCollaborator).where(
+                ProjectCollaborator.project_id == project_id,
+                ProjectCollaborator.invitee_id == current_user.id,
+                ProjectCollaborator.status == CollaboratorStatus.accepted,
+                ProjectCollaborator.role == CollaboratorRole.admin,
+            )
+        )
+        if not collab_result.scalar_one_or_none():
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+    collab_result = await db.execute(
+        select(ProjectCollaborator).where(
+            ProjectCollaborator.id == collaborator_id,
+            ProjectCollaborator.project_id == project_id,
+        )
+    )
+    collab = collab_result.scalar_one_or_none()
+    if not collab:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Collaborator not found"
+        )
+
+    collab.role = data.role
+    await db.commit()
+    await db.refresh(collab)
+    return collab

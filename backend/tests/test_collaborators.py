@@ -366,6 +366,107 @@ async def test_remove_collaborator_404_not_found(
     assert response.status_code == 404
 
 
+# --- PATCH /projects/{project_id}/collaborators/{collaborator_id} (role) ---
+
+
+@pytest.mark.asyncio
+async def test_update_collaborator_role_owner_success(
+    client: AsyncClient, owner_headers: dict, project: dict, invitation: dict
+) -> None:
+    """Owner can change a collaborator's role."""
+    response = await client.patch(
+        f"/api/projects/{project['id']}/collaborators/{invitation['id']}",
+        json={"role": "viewer"},
+        headers=owner_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["role"] == "viewer"
+
+
+@pytest.mark.asyncio
+async def test_update_collaborator_role_admin_success(
+    client: AsyncClient,
+    owner_headers: dict,
+    project: dict,
+    invitee: dict,
+    invitee_headers: dict,
+    third_user: dict,
+    third_headers: dict,
+) -> None:
+    """Accepted admin collaborator can change another collaborator's role."""
+    # Invite invitee as admin and accept
+    invite_resp = await client.post(
+        f"/api/projects/{project['id']}/collaborators",
+        json={"identifier": invitee["email"], "role": "admin"},
+        headers=owner_headers,
+    )
+    collab_id = invite_resp.json()["id"]
+    await client.patch(
+        f"/api/collaborators/{collab_id}",
+        json={"status": "accepted"},
+        headers=invitee_headers,
+    )
+
+    # Invite third user as viewer
+    third_invite = await client.post(
+        f"/api/projects/{project['id']}/collaborators",
+        json={"identifier": third_user["email"], "role": "viewer"},
+        headers=owner_headers,
+    )
+    third_collab_id = third_invite.json()["id"]
+
+    # Admin changes third user's role
+    response = await client.patch(
+        f"/api/projects/{project['id']}/collaborators/{third_collab_id}",
+        json={"role": "editor"},
+        headers=invitee_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["role"] == "editor"
+
+
+@pytest.mark.asyncio
+async def test_update_collaborator_role_works_on_pending(
+    client: AsyncClient, owner_headers: dict, project: dict, invitation: dict
+) -> None:
+    """Role change is allowed regardless of collaborator status (pending)."""
+    response = await client.patch(
+        f"/api/projects/{project['id']}/collaborators/{invitation['id']}",
+        json={"role": "admin"},
+        headers=owner_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["role"] == "admin"
+    assert response.json()["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_update_collaborator_role_403_non_owner(
+    client: AsyncClient, third_headers: dict, project: dict, invitation: dict
+) -> None:
+    """Non-owner/non-admin cannot change collaborator role."""
+    response = await client.patch(
+        f"/api/projects/{project['id']}/collaborators/{invitation['id']}",
+        json={"role": "viewer"},
+        headers=third_headers,
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_update_collaborator_role_404_not_found(
+    client: AsyncClient, owner_headers: dict, project: dict
+) -> None:
+    """Returns 404 when collaborator record does not exist on this project."""
+    fake_id = uuid.uuid4()
+    response = await client.patch(
+        f"/api/projects/{project['id']}/collaborators/{fake_id}",
+        json={"role": "viewer"},
+        headers=owner_headers,
+    )
+    assert response.status_code == 404
+
+
 @pytest.mark.asyncio
 async def test_invite_collaborator_admin_can_invite(
     client: AsyncClient,
