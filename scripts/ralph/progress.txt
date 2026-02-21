@@ -9,6 +9,8 @@ Started: Sat Feb 21 12:30:35 EST 2026
 - Alembic migrations: manually create PG enums with `op.execute("CREATE TYPE ...")` then reference with `create_type=False` in Column definitions
 - Alembic migration revision IDs follow pattern: alphanumeric hash, `down_revision` links to previous
 - Model relationships use `foreign_keys=[field]` when multiple FK columns reference same table
+- To expose routes at a different prefix, use a separate `APIRouter` variable in the same file and register with a different `app.include_router(...)` prefix in main.py
+- PATCH /collaborators/{collaborator_id} (status update) is mounted at `/api`, separate from project-scoped routes at `/api/projects`
 
 ## 2026-02-21 - US-001
 - Created `ProjectCollaborator` SQLAlchemy model in `backend/models/collaborator.py`
@@ -38,4 +40,19 @@ Started: Sat Feb 21 12:30:35 EST 2026
   - `User` model has no `username` field — identifier lookup is email-only
   - Tests use in-memory SQLite via `sqlite+aiosqlite://` — all SQLAlchemy models must be imported into `Base.metadata` for tables to be created
   - Admin-can-invite path requires an accepted collaborator record; pending status alone is insufficient for elevated permissions
+---
+
+## 2026-02-21 - US-003
+- Added `CollaboratorStatusUpdateRequest` schema to `backend/schemas/collaborator.py`
+- Added `status_router` (separate APIRouter) in `backend/routers/collaborators.py` for standalone `/api/collaborators/{id}` PATCH endpoint
+- Added PATCH `/collaborators/{collaborator_id}` (via status_router) — invitee-only, 400 if status=pending
+- Added GET `/{project_id}/collaborators` — owner or accepted admin only
+- Added DELETE `/{project_id}/collaborators/{collaborator_id}` — owner only, 400 if invitee is project owner
+- Registered `status_router` in `backend/main.py` at `/api` prefix
+- Added 11 new tests covering all acceptance criteria (19 total in test file, all passing)
+- **Learnings for future iterations:**
+  - Use two `APIRouter` variables in the same file when routes need different URL prefixes
+  - The PATCH status endpoint is at `/api/collaborators/{id}` (not under `/api/projects`)
+  - PATCH role endpoint (US-004) will be at `/api/projects/{project_id}/collaborators/{id}` — use the existing `router`
+  - Test fixture `invitation` creates a pending collaborator record for reuse across tests
 ---
