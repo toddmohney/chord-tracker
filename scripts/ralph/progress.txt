@@ -103,3 +103,16 @@ Started: Sat Feb 21 10:55:30 EST 2026
   - Wrapping `BeatSlot` content in a `relative flex-1` outer div allows absolute popover positioning while preserving flex layout in the measure's `flex gap-1` container
   - Browser verification not done (no browser tool) — manual check recommended
 ---
+
+## 2026-02-21 - US-007
+- What was implemented: '+ Add Measure' button in the Chord Sequence header appends a new empty measure (using `crypto.randomUUID()` for client-side id). Each measure now has a `×` remove button; removing an empty measure removes it immediately; removing a measure with chords shows inline confirmation dialog with message 'This will remove all chords in this measure'. Remaining measures are re-positioned 0-based after removal. Staff lines reflow automatically since the existing `slice(i, i + measuresPerLine)` loop naturally handles new measure count.
+- Files changed:
+  - `frontend/src/components/ChordStaff.tsx` — added `onRemoveMeasure` to `ChordStaffProps` and `Measure` props; added `confirmingRemove` state + `×` button + inline confirmation UI to `Measure`
+  - `frontend/src/pages/SongDetail.tsx` — added `handleAddMeasure` and `handleRemoveMeasure` functions; added '+ Add Measure' button in section header; passed `onRemoveMeasure` to `ChordStaff`
+- **Learnings for future iterations:**
+  - `crypto.randomUUID()` is available in modern browsers and typed in TypeScript lib.dom.d.ts — use it for generating client-side temporary IDs
+  - Inline confirmation pattern (like `confirmingDelete` in SortableChordCard) works well for per-measure remove buttons; avoids modal complexity
+  - Staff line reflow is automatic — the `measures.slice(i, i + measuresPerLine)` loop in `ChordStaff` handles any measure count without additional logic
+  - Re-positioning after removal: `.filter(...).map((m, index) => ({ ...m, position: index }))` keeps positions 0-based and contiguous
+  - Browser verification not done (no browser tool) — manual check recommended
+---

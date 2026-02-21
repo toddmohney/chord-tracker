@@ -182,5 +182,8 @@ Add a chord sequencing view to the song detail page where users can arrange thei
 ## Open Questions
 
 - Should `measures_per_line` be user-configurable per sequence, or always fixed at 4?
+    - Let's got with 'fixed at 4' for now
 - Should deleting a chord from the chord list automatically clear it from any beat slots in the sequence?
+    - Yes
 - Should there be a visual indicator when a chord used in the sequence has been deleted from the chord list (orphaned reference)?
+    - No, since we're clearing the chord from the beat slots, there should be no orphaned refereneces
