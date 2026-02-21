@@ -424,6 +424,12 @@ export default function SongDetail() {
     )
   }
 
+  function handleSetEndingNumber(measureId: string, endingNumber: number | null) {
+    setSequenceMeasures((prev) =>
+      prev.map((m) => (m.id === measureId ? { ...m, ending_number: endingNumber } : m)),
+    )
+  }
+
   function handleRemoveBeat(measureId: string, beatPosition: number) {
     setSequenceMeasures((prev) =>
       prev.map((m) => {
@@ -945,6 +951,7 @@ export default function SongDetail() {
             onRemoveMeasure={handleRemoveMeasure}
             onToggleRepeatStart={handleToggleRepeatStart}
             onToggleRepeatEnd={handleToggleRepeatEnd}
+            onSetEndingNumber={handleSetEndingNumber}
           />
         </div>
       </DndContext>

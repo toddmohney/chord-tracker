@@ -12,6 +12,7 @@ export interface ChordStaffProps {
   onRemoveMeasure: (measureId: string) => void
   onToggleRepeatStart: (measureId: string) => void
   onToggleRepeatEnd: (measureId: string) => void
+  onSetEndingNumber: (measureId: string, endingNumber: number | null) => void
 }
 
 function TimeSignature({ numerator, denominator }: { numerator: number; denominator: number }) {
@@ -107,6 +108,7 @@ function Measure({
   onRemoveMeasure,
   onToggleRepeatStart,
   onToggleRepeatEnd,
+  onSetEndingNumber,
 }: {
   measure: SequenceMeasure
   chordMap: Record<string, string>
@@ -114,6 +116,7 @@ function Measure({
   onRemoveMeasure: (measureId: string) => void
   onToggleRepeatStart: (measureId: string) => void
   onToggleRepeatEnd: (measureId: string) => void
+  onSetEndingNumber: (measureId: string, endingNumber: number | null) => void
 }) {
   const [confirmingRemove, setConfirmingRemove] = useState(false)
   const hasChords = measure.beats.some((b) => b.chord_id !== null)
@@ -179,7 +182,7 @@ function Measure({
           />
         ))}
       </div>
-      {/* Repeat annotation toggles */}
+      {/* Repeat annotation toggles + ending number selector */}
       <div className="flex items-center justify-between mt-0.5">
         <button
           type="button"
@@ -193,6 +196,24 @@ function Measure({
         >
           |:
         </button>
+        {/* Ending number selector: None / 1 / 2 */}
+        <div className="flex items-center gap-0.5">
+          {([null, 1, 2] as (number | null)[]).map((n) => (
+            <button
+              key={n ?? 'none'}
+              type="button"
+              onClick={() => onSetEndingNumber(measure.id, measure.ending_number === n ? null : n)}
+              className={`rounded px-1 py-0.5 text-xs leading-none ${
+                measure.ending_number === n && n !== null
+                  ? 'bg-gray-700 text-white font-bold'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+              title={n === null ? 'No ending' : `Ending ${n}`}
+            >
+              {n === null ? '—' : `${n}.`}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => onToggleRepeatEnd(measure.id)}
@@ -220,6 +241,7 @@ export default function ChordStaff({
   onRemoveMeasure,
   onToggleRepeatStart,
   onToggleRepeatEnd,
+  onSetEndingNumber,
 }: ChordStaffProps) {
   // Split measures into lines
   const lines: SequenceMeasure[][] = []
@@ -308,6 +330,7 @@ export default function ChordStaff({
                   onRemoveMeasure={onRemoveMeasure}
                   onToggleRepeatStart={onToggleRepeatStart}
                   onToggleRepeatEnd={onToggleRepeatEnd}
+                  onSetEndingNumber={onSetEndingNumber}
                 />
                 {/* Barline after measure */}
                 {barlineContent}
