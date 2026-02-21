@@ -20,6 +20,8 @@ import { CSS } from '@dnd-kit/utilities'
 import { apiClient } from '../api/client'
 import AppLayout from '../components/AppLayout'
 import GuitarNeck, { type Marker } from '../components/GuitarNeck'
+import ChordStaff from '../components/ChordStaff'
+import { buildDefaultMeasures, type SequenceMeasure } from '../types/sequence'
 import { chordTemplates } from '../data/chordTemplates'
 
 interface Song {
@@ -236,6 +238,14 @@ export default function SongDetail() {
   const [editorStartingFret, setEditorStartingFret] = useState(0)
   const [templateBrowserOpen, setTemplateBrowserOpen] = useState(false)
   const [templateSearch, setTemplateSearch] = useState('')
+
+  // Sequence state (initialized with 4 empty measures in 4/4)
+  const [sequenceNumerator] = useState(4)
+  const [sequenceDenominator] = useState(4)
+  const [measuresPerLine] = useState(4)
+  const [sequenceMeasures] = useState<SequenceMeasure[]>(
+    () => buildDefaultMeasures(4, 4),
+  )
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -652,6 +662,19 @@ export default function SongDetail() {
           </div>
         </>
       )}
+
+      {/* Chord Sequence Section */}
+      <div className="mt-8 border-t border-gray-200 pt-6">
+        <h2 className="mb-4 text-base font-semibold text-gray-900">
+          Chord Sequence
+        </h2>
+        <ChordStaff
+          numerator={sequenceNumerator}
+          denominator={sequenceDenominator}
+          measuresPerLine={measuresPerLine}
+          measures={sequenceMeasures}
+        />
+      </div>
     </AppLayout>
   )
 }
