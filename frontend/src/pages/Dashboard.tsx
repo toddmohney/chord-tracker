@@ -113,7 +113,10 @@ export default function Dashboard() {
   return (
     <>
       {showInvitationsModal && (
-        <PendingInvitationsModal onClose={() => setShowInvitationsModal(false)} />
+        <PendingInvitationsModal
+          onClose={() => setShowInvitationsModal(false)}
+          onAccept={fetchProjects}
+        />
       )}
     <AppLayout title="My Projects">
       {error && (

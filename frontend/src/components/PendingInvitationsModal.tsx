@@ -14,9 +14,10 @@ interface PendingInvitation {
 
 interface Props {
   onClose: () => void
+  onAccept?: () => void
 }
 
-export default function PendingInvitationsModal({ onClose }: Props) {
+export default function PendingInvitationsModal({ onClose, onAccept }: Props) {
   const [invitations, setInvitations] = useState<PendingInvitation[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -46,6 +47,7 @@ export default function PendingInvitationsModal({ onClose }: Props) {
     })
     if (response.ok) {
       removeInvitation(invitation.id)
+      onAccept?.()
     }
   }
 
