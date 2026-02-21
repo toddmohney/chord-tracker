@@ -118,3 +118,14 @@ Started: Sat Feb 21 12:30:35 EST 2026
   - `selectinload` requires importing from `sqlalchemy.orm`; adds to `status_router`'s endpoint which is mounted at `/api`
   - The modal is rendered in a React fragment alongside AppLayout in Dashboard's return, using `fixed inset-0 z-50` for overlay
 ---
+
+## 2026-02-21 - US-007
+- Added `onAccept?: () => void` prop to `PendingInvitationsModal`
+  - Called after successful PATCH accept response to trigger project list refresh
+- Updated `Dashboard.tsx` to pass `onAccept={fetchProjects}` to the modal
+  - Accepted project appears in dashboard immediately without page reload
+- Modal already auto-hides when `invitations.length === 0` (from US-006) — satisfies "closes automatically when all resolved"
+- **Learnings for future iterations:**
+  - `PendingInvitationsModal` already had Accept/Decline API calls from US-006; US-007 only needed the dashboard refresh callback
+  - Pattern: pass `fetchProjects` (useCallback) as `onAccept` prop — safe to call multiple times without infinite loop risk
+---
