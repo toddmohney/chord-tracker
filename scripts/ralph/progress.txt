@@ -90,3 +90,16 @@ Started: Sat Feb 21 10:55:30 EST 2026
   - TypeScript strict `noUnusedLocals` means unused state setters (e.g., `setSequenceMeasures`) must be removed from destructuring until actually needed
   - Browser verification was not done (no browser tool available) — manual check recommended
 ---
+
+## 2026-02-21 - US-006
+- What was implemented: Clicking a filled beat slot now opens a small popover with a "Remove" option. Selecting "Remove" clears the chord from that slot (sets chord_id to null), reverting it to the empty dashed placeholder. A fixed backdrop div closes the popover when clicking outside.
+- Files changed:
+  - `frontend/src/components/ChordStaff.tsx` — added `useState` import; `BeatSlot` now has `showMenu` state + popover UI + backdrop; `Measure` and `ChordStaff` thread `onRemoveBeat` callback
+  - `frontend/src/pages/SongDetail.tsx` — added `handleRemoveBeat` function; passes `onRemoveBeat` to `ChordStaff`
+- **Learnings for future iterations:**
+  - Popover pattern: `useState<boolean>` + `fixed inset-0 z-10` backdrop div + `absolute` popover with `z-20`; toggling on click, closing on backdrop click
+  - Beat slot click only triggers menu when `beat.chord_id` is non-null; empty slots don't react to click
+  - Filled beat slots get `cursor-pointer hover:border-gray-400` to signal interactivity
+  - Wrapping `BeatSlot` content in a `relative flex-1` outer div allows absolute popover positioning while preserving flex layout in the measure's `flex gap-1` container
+  - Browser verification not done (no browser tool) — manual check recommended
+---
