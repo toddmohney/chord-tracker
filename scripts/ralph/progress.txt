@@ -104,6 +104,17 @@ Started: Sat Feb 21 10:55:30 EST 2026
   - Browser verification not done (no browser tool) — manual check recommended
 ---
 
+## 2026-02-21 - US-008
+- What was implemented: Time signature selector (numerator 2–12, denominator 2/4/8/16) displayed above the staff. Changing the numerator immediately updates beat count in every measure (adds empty beats when increasing, trims when decreasing). If decreasing numerator would lose chords, shows inline confirmation dialog before applying. Denominator change updates display only. Both values persisted on Save Sequence.
+- Files changed:
+  - `frontend/src/pages/SongDetail.tsx` — added `pendingNumerator` state, `applyNumeratorChange`, `handleNumeratorChange`, `handleDenominatorChange` functions; added time signature selector UI and confirmation dialog above ChordStaff
+- **Learnings for future iterations:**
+  - When expanding beats (numerator increases), build from existing beats + fill gaps by position; sort by beat_position after
+  - Confirmation dialog pattern: `useState<number | null>` for the pending value; show dialog when set, apply or cancel buttons reset it to null
+  - Denominator change is pure display — no beat count changes needed (beat count is determined by numerator)
+  - Browser verification not done (no browser tool) — manual check recommended
+---
+
 ## 2026-02-21 - US-007
 - What was implemented: '+ Add Measure' button in the Chord Sequence header appends a new empty measure (using `crypto.randomUUID()` for client-side id). Each measure now has a `×` remove button; removing an empty measure removes it immediately; removing a measure with chords shows inline confirmation dialog with message 'This will remove all chords in this measure'. Remaining measures are re-positioned 0-based after removal. Staff lines reflow automatically since the existing `slice(i, i + measuresPerLine)` loop naturally handles new measure count.
 - Files changed:
