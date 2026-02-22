@@ -129,3 +129,21 @@ Started: Sat Feb 21 12:30:35 EST 2026
   - `PendingInvitationsModal` already had Accept/Decline API calls from US-006; US-007 only needed the dashboard refresh callback
   - Pattern: pass `fetchProjects` (useCallback) as `onAccept` prop — safe to call multiple times without infinite loop risk
 ---
+
+## 2026-02-21 - US-008
+- Added `shared_by: str | None = None` to `ProjectResponse` in `backend/schemas/project.py`
+- Updated `list_projects` in `backend/routers/projects.py` to join the inviter User on `ProjectCollaborator.inviter_id` and include `inviter.email` as `shared_by` in the response
+- Updated `frontend/src/pages/Dashboard.tsx`:
+  - Added `my_role`, `shared_by`, and `user_id` to `Project` interface
+  - Derived `ownedProjects` and `sharedProjects` from filtered project list
+  - Extracted `renderProjectCard` helper for shared card rendering logic
+  - Shared projects show a purple "Shared" badge next to the project title
+  - Shared projects show "Shared by [email]" instead of the updated date
+  - Dashboard renders two sections: "My Projects" and "Shared with Me" (section headers only visible when both types exist)
+  - Rename/Delete buttons are hidden for shared projects (role enforcement in UI deferred to US-009)
+- **Learnings for future iterations:**
+  - `list_projects` joins `User` directly on `ProjectCollaborator.inviter_id` — SQLAlchemy returns `(collab, project, inviter)` tuples
+  - `shared_by` field is `None` for owned projects, populated with inviter email for shared projects
+  - Dashboard section headers ("My Projects" / "Shared with Me") only shown when both sections have entries — avoids redundant heading when only one type exists
+  - `renderProjectCard` as a helper function (not a React component) works fine with `key` on the returned div — React handles keys correctly
+---
