@@ -35,6 +35,7 @@ class ProjectResponse(BaseModel):
     name: str
     user_id: uuid.UUID
     my_role: ProjectRole | None = None
+    shared_by: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -28,10 +28,11 @@ async def list_projects(
     )
     owned_projects = owned_result.scalars().all()
 
-    # Collaborated projects (accepted only)
+    # Collaborated projects (accepted only) — join inviter User for shared_by email
     collab_result = await db.execute(
-        select(ProjectCollaborator, Project)
+        select(ProjectCollaborator, Project, User)
         .join(Project, Project.id == ProjectCollaborator.project_id)
+        .join(User, User.id == ProjectCollaborator.inviter_id)
         .where(
             ProjectCollaborator.invitee_id == current_user.id,
             ProjectCollaborator.status == CollaboratorStatus.accepted,
@@ -44,10 +45,10 @@ async def list_projects(
         responses.append(
             ProjectResponse.model_validate(p).model_copy(update={"my_role": ProjectRole.owner})
         )
-    for collab, p in collab_rows:
+    for collab, p, inviter in collab_rows:
         responses.append(
             ProjectResponse.model_validate(p).model_copy(
-                update={"my_role": ProjectRole(collab.role)}
+                update={"my_role": ProjectRole(collab.role), "shared_by": inviter.email}
             )
         )
 
