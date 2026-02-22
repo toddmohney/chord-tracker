@@ -37,6 +37,7 @@ interface Song {
 interface Project {
   id: string
   name: string
+  my_role: string | null
 }
 
 interface Chord {
@@ -53,6 +54,7 @@ interface SortableChordCardProps {
   chord: Chord
   index: number
   total: number
+  canEdit: boolean
   onEdit: (chord: Chord) => void
   onDelete: (chord: Chord) => void
   onMoveUp: (index: number) => void
@@ -63,6 +65,7 @@ function SortableChordCard({
   chord,
   index,
   total,
+  canEdit,
   onEdit,
   onDelete,
   onMoveUp,
@@ -91,102 +94,56 @@ function SortableChordCard({
       className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm"
     >
       <div className="flex items-start gap-2">
-        {/* Drag handle */}
-        <button
-          type="button"
-          className="mt-1 cursor-grab touch-none text-gray-400 hover:text-gray-600"
-          aria-label="Drag to reorder"
-          {...attributes}
-          {...listeners}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="currentColor"
+        {/* Drag handle — hidden for viewers */}
+        {canEdit && (
+          <button
+            type="button"
+            className="mt-1 cursor-grab touch-none text-gray-400 hover:text-gray-600"
+            aria-label="Drag to reorder"
+            {...attributes}
+            {...listeners}
           >
-            <circle cx="5" cy="3" r="1.5" />
-            <circle cx="11" cy="3" r="1.5" />
-            <circle cx="5" cy="8" r="1.5" />
-            <circle cx="11" cy="8" r="1.5" />
-            <circle cx="5" cy="13" r="1.5" />
-            <circle cx="11" cy="13" r="1.5" />
-          </svg>
-        </button>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+            >
+              <circle cx="5" cy="3" r="1.5" />
+              <circle cx="11" cy="3" r="1.5" />
+              <circle cx="5" cy="8" r="1.5" />
+              <circle cx="11" cy="8" r="1.5" />
+              <circle cx="5" cy="13" r="1.5" />
+              <circle cx="11" cy="13" r="1.5" />
+            </svg>
+          </button>
+        )}
 
         <div className="min-w-0 flex-1">
           {/* Chord name + actions row */}
           <div className="mb-2 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => onEdit(chord)}
-              className="truncate text-sm font-medium text-gray-900 hover:text-blue-600"
-            >
-              {chord.name || 'Untitled'}
-            </button>
-            <div className="ml-2 flex items-center gap-1">
-              {/* Move up */}
+            {canEdit ? (
               <button
                 type="button"
-                onClick={() => onMoveUp(index)}
-                disabled={index === 0}
-                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
-                aria-label="Move up"
+                onClick={() => onEdit(chord)}
+                className="truncate text-sm font-medium text-gray-900 hover:text-blue-600"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M7 11V3M7 3L3 7M7 3l4 4" />
-                </svg>
+                {chord.name || 'Untitled'}
               </button>
-              {/* Move down */}
-              <button
-                type="button"
-                onClick={() => onMoveDown(index)}
-                disabled={index === total - 1}
-                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
-                aria-label="Move down"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M7 3v8M7 11l-4-4M7 11l4-4" />
-                </svg>
-              </button>
-              {/* Delete */}
-              {confirmingDelete ? (
-                <span className="flex items-center gap-1 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => onDelete(chord)}
-                    className="rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmingDelete(false)}
-                    className="rounded border border-gray-300 px-2 py-0.5 text-gray-600 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                </span>
-              ) : (
+            ) : (
+              <span className="truncate text-sm font-medium text-gray-900">
+                {chord.name || 'Untitled'}
+              </span>
+            )}
+            {canEdit && (
+              <div className="ml-2 flex items-center gap-1">
+                {/* Move up */}
                 <button
                   type="button"
-                  onClick={() => setConfirmingDelete(true)}
-                  className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                  aria-label="Delete chord"
+                  onClick={() => onMoveUp(index)}
+                  disabled={index === 0}
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                  aria-label="Move up"
                 >
                   <svg
                     width="14"
@@ -196,20 +153,88 @@ function SortableChordCard({
                     stroke="currentColor"
                     strokeWidth="2"
                   >
-                    <path d="M2 4h10M5 4V2h4v2M5 6v5M9 6v5M3 4l1 8h6l1-8" />
+                    <path d="M7 11V3M7 3L3 7M7 3l4 4" />
                   </svg>
                 </button>
-              )}
-            </div>
+                {/* Move down */}
+                <button
+                  type="button"
+                  onClick={() => onMoveDown(index)}
+                  disabled={index === total - 1}
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                  aria-label="Move down"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 14 14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M7 3v8M7 11l-4-4M7 11l4-4" />
+                  </svg>
+                </button>
+                {/* Delete */}
+                {confirmingDelete ? (
+                  <span className="flex items-center gap-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => onDelete(chord)}
+                      className="rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDelete(false)}
+                      className="rounded border border-gray-300 px-2 py-0.5 text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(true)}
+                    className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                    aria-label="Delete chord"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 14 14"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M2 4h10M5 4V2h4v2M5 6v5M9 6v5M3 4l1 8h6l1-8" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Mini guitar neck preview */}
-          <button
-            type="button"
-            onClick={() => onEdit(chord)}
-            className="block w-full cursor-pointer"
-          >
-            <div className="pointer-events-none">
+          {/* Mini guitar neck preview — clickable to edit when canEdit */}
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={() => onEdit(chord)}
+              className="block w-full cursor-pointer"
+            >
+              <div className="pointer-events-none">
+                <GuitarNeck
+                  markers={chord.markers}
+                  stringCount={chord.string_count || 6}
+                  tuning={chord.tuning || 'EADGBE'}
+                  fretCount={5}
+                  startingFret={chord.starting_fret ?? 0}
+                />
+              </div>
+            </button>
+          ) : (
+            <div>
               <GuitarNeck
                 markers={chord.markers}
                 stringCount={chord.string_count || 6}
@@ -218,7 +243,7 @@ function SortableChordCard({
                 startingFret={chord.starting_fret ?? 0}
               />
             </div>
-          </button>
+          )}
         </div>
       </div>
     </div>
@@ -657,6 +682,8 @@ export default function SongDetail() {
     )
   }
 
+  const canEdit = ['owner', 'admin', 'editor'].includes(project?.my_role ?? '')
+
   const breadcrumbs = [
     { label: 'Dashboard', to: '/dashboard' },
     ...(project
@@ -832,12 +859,14 @@ export default function SongDetail() {
             <p className="mt-1 text-sm text-gray-400">
               Add your first chord to start building your progression.
             </p>
-            <button
-              onClick={openNewChordEditor}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              Add Chord
-            </button>
+            {canEdit && (
+              <button
+                onClick={openNewChordEditor}
+                className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Add Chord
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -852,6 +881,7 @@ export default function SongDetail() {
                     chord={chord}
                     index={index}
                     total={chords.length}
+                    canEdit={canEdit}
                     onEdit={openEditChordEditor}
                     onDelete={handleDeleteChord}
                     onMoveUp={handleMoveUp}
@@ -860,14 +890,16 @@ export default function SongDetail() {
                 ))}
               </div>
             </SortableContext>
-            <div className="mt-6">
-              <button
-                onClick={openNewChordEditor}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                Add Chord
-              </button>
-            </div>
+            {canEdit && (
+              <div className="mt-6">
+                <button
+                  onClick={openNewChordEditor}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Add Chord
+                </button>
+              </div>
+            )}
           </>
         )}
 
@@ -877,45 +909,49 @@ export default function SongDetail() {
             <h2 className="text-base font-semibold text-gray-900">
               Chord Sequence
             </h2>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleAddMeasure}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            {canEdit && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleAddMeasure}
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  + Add Measure
+                </button>
+                <button
+                  onClick={handleSaveSequence}
+                  disabled={sequenceSaving}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {sequenceSaving ? 'Saving...' : 'Save Sequence'}
+                </button>
+              </div>
+            )}
+          </div>
+          {/* Time signature selector — only for editors */}
+          {canEdit && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Time Signature:</span>
+              <select
+                value={sequenceNumerator}
+                onChange={(e) => handleNumeratorChange(Number(e.target.value))}
+                className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                + Add Measure
-              </button>
-              <button
-                onClick={handleSaveSequence}
-                disabled={sequenceSaving}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                {Array.from({ length: 11 }, (_, i) => i + 2).map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+              <span className="text-sm font-medium text-gray-500">/</span>
+              <select
+                value={sequenceDenominator}
+                onChange={(e) => handleDenominatorChange(Number(e.target.value))}
+                className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                {sequenceSaving ? 'Saving...' : 'Save Sequence'}
-              </button>
+                {[2, 4, 8, 16].map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
             </div>
-          </div>
-          {/* Time signature selector */}
-          <div className="mb-4 flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-700">Time Signature:</span>
-            <select
-              value={sequenceNumerator}
-              onChange={(e) => handleNumeratorChange(Number(e.target.value))}
-              className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {Array.from({ length: 11 }, (_, i) => i + 2).map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-            <span className="text-sm font-medium text-gray-500">/</span>
-            <select
-              value={sequenceDenominator}
-              onChange={(e) => handleDenominatorChange(Number(e.target.value))}
-              className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {[2, 4, 8, 16].map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
-          </div>
+          )}
           {/* Confirmation dialog when reducing numerator would lose beat data */}
           {pendingNumerator !== null && (
             <div className="mb-4 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
@@ -947,6 +983,7 @@ export default function SongDetail() {
             measuresPerLine={measuresPerLine}
             measures={sequenceMeasures}
             chordMap={Object.fromEntries(chords.map((c) => [c.id, c.name ?? 'Untitled']))}
+            canEdit={canEdit}
             onRemoveBeat={handleRemoveBeat}
             onRemoveMeasure={handleRemoveMeasure}
             onToggleRepeatStart={handleToggleRepeatStart}

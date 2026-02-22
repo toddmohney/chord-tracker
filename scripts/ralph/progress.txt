@@ -1,155 +1,226 @@
-## 2026-02-21 - US-010
-- What was implemented: Numbered ending annotations for each measure. Each measure footer now shows three small toggle buttons: "—" (none), "1.", "2.". Clicking an active ending number deselects it (sets to null). The bracket display above the measure was already implemented in prior iterations. `handleSetEndingNumber` added to `SongDetail.tsx` and wired to `ChordStaff` via the new `onSetEndingNumber` prop. Ending number state is persisted via the existing Save Sequence mechanism (already included `ending_number` in payload).
-- Files changed:
-  - `frontend/src/components/ChordStaff.tsx` — added `onSetEndingNumber` to `ChordStaffProps` and `Measure` props; added ending number selector buttons (None/1./2.) in `Measure` footer between repeat toggles
-  - `frontend/src/pages/SongDetail.tsx` — added `handleSetEndingNumber` function; passed `onSetEndingNumber` to `ChordStaff`
-- **Learnings for future iterations:**
-  - `ending_number` was already wired into save payload and bracket display from earlier stories — only the setter UI was missing
-  - Toggling logic: clicking the active value sets it to null (deselects); clicking an inactive value sets it (replaces any existing)
-  - The `([null, 1, 2] as (number | null)[]).map(...)` pattern works well for typed nullable selectors in TypeScript
-  - Browser verification not done (no browser tool) — manual check recommended
----
-
-## 2026-02-21 - US-009
-- What was implemented: Repeat barline annotations for chord staff. Each measure has `|:` (repeat start) and `:|` (repeat end) toggle buttons below the beat slots. Active toggles render as filled dark buttons. The staff rendering displays proper `|:` and `:|` barlines (with double bar lines and dots). Combined `:|:` barlines render when adjacent measures have repeat-end + repeat-start respectively. State is persisted via the existing Save Sequence mechanism.
-- Files changed:
-  - `frontend/src/components/ChordStaff.tsx` — added `onToggleRepeatStart`/`onToggleRepeatEnd` props; added `RepeatDots` component; added toggle buttons in `Measure` footer; updated barline logic in `ChordStaff` to render `|:`, `:|`, and `:|:` barlines
-  - `frontend/src/pages/SongDetail.tsx` — added `handleToggleRepeatStart` and `handleToggleRepeatEnd` handlers; passed them to `ChordStaff`
-- **Learnings for future iterations:**
-  - `repeat_start` and `repeat_end` fields already exist in `SequenceMeasure` type and backend — no schema changes needed
-  - Barline rendering logic: opening barline of each line checks `lineMeasures[0]?.repeat_start`; barline after each measure checks `measure.repeat_end` and `nextMeasure?.repeat_start`
-  - `RepeatDots` uses `self-stretch flex-col justify-center` to vertically center dots in the flex row
-  - Standard `|:` = thin+bold+dots; `:|` = dots+bold+thin; `:|:` = dots+bold+thin+bold+dots
-  - Toggle button pattern: `font-mono font-bold` for musical symbol rendering; active state uses `bg-gray-700 text-white`
-  - Browser verification not done (no browser tool) — manual check recommended
+# Ralph Progress Log
+Started: Sat Feb 21 12:30:35 EST 2026
 ---
 
 ## Codebase Patterns
-- When adding a new drop target type alongside existing sortable DnD, use a single DndContext wrapping both sections; distinguish drops via `over.data.current?.type` (useDroppable `data` prop)
-- Beat slot droppable IDs use `|` as separator (e.g., `beat|${measureId}|${beatPosition}`) to avoid UUID hyphen collisions when parsing
-- In handleDragEnd: check `over.data.current?.type === 'beat'` first, then fall through to sortable reorder; guard with `if (oldIndex === -1 || newIndex === -1) return` to avoid spurious reorders when dropping on non-chord targets
-- Frontend: React 19 + TypeScript (strict: noUnusedLocals, noUnusedParameters) + Vite + Tailwind CSS 4
-- Frontend lint rule `react-refresh/only-export-components` requires non-component exports (types, utils) to live in separate files (e.g., `src/types/`)
-- Frontend typecheck: `npx tsc -b --noEmit` from `frontend/` dir; lint: `npm run lint`
-- Backend uses SQLAlchemy 2.0+ async with `Mapped` type hints and `mapped_column`
-- All models use `UUID(as_uuid=True)` primary keys with `default=uuid.uuid4`
-- Timestamps: `DateTime(timezone=True)` with `server_default=func.now()` and `onupdate=func.now()` for `updated_at`
-- Foreign keys use `ondelete="CASCADE"` pattern with `index=True`
-- Relationships use `back_populates` (bidirectional) with `cascade="all, delete-orphan"` on parent side
-- Alembic migrations use `postgresql.UUID(as_uuid=True)` in migration files (not just `sa.UUID`)
-- Tests run via `.venv/bin/pytest tests/ -x -q` from backend directory
-- Ruff linter at `.venv/bin/ruff`, line length 100
-- No mypy installed; typecheck is implied via ruff + Python import verification
-- SQLAlchemy `default=uuid.uuid4` on primary keys runs at INSERT time, NOT at Python object construction — `obj.id` is None until flushed/committed. Explicitly pass `id=uuid.uuid4()` when you need the id before inserting (e.g., to set a FK on a related object in the same batch)
-- Use `selectinload(Parent.children).selectinload(Child.grandchildren)` for eager loading nested relationships in async SQLAlchemy (avoids MissingGreenlet errors from lazy loads)
-- For bulk DELETE+recreate in PUT endpoints: delete child records first (beats), then parent (measures) using `db.execute(delete(Model).where(...))` to work in both SQLite (tests) and PostgreSQL (production)
----
-
-# Ralph Progress Log
-Started: Sat Feb 21 10:55:30 EST 2026
----
+- Use `.venv/bin/python` and `.venv/bin/ruff` for quality checks (system python lacks project deps)
+- Models use `StrEnum` (not `str, enum.Enum`) per ruff UP042 rule
+- SQLAlchemy models: use `mapped_column` with multiline args for columns >100 chars
+- Alembic migrations: manually create PG enums with `op.execute("CREATE TYPE ...")` then reference with `create_type=False` in Column definitions
+- Alembic migration revision IDs follow pattern: alphanumeric hash, `down_revision` links to previous
+- Model relationships use `foreign_keys=[field]` when multiple FK columns reference same table
+- To expose routes at a different prefix, use a separate `APIRouter` variable in the same file and register with a different `app.include_router(...)` prefix in main.py
+- PATCH /collaborators/{collaborator_id} (status update) is mounted at `/api`, separate from project-scoped routes at `/api/projects`
+- `ProjectRole` enum (owner/admin/editor/viewer) lives in `models/collaborator.py`; `check_project_access(project_id, user, db)` is in `auth/project_access.py`
+- For song/chord endpoints (accessed by ID, not project_id), load the resource first then call `check_project_access(song.project_id, ...)` directly — can't use FastAPI Depends for these
+- `ProjectResponse.my_role` is populated explicitly in each endpoint using `.model_copy(update={"my_role": role})` — ORM objects don't carry this field
+- Frontend: use `npx tsc --noEmit` for typecheck (no "typecheck" script in package.json); `npm run lint` for ESLint
+- Frontend: `PendingInvitationsModal` uses `fixed inset-0 z-50` overlay pattern; loaded from Dashboard with `showInvitationsModal` state
+- When backend endpoint needs enriched data (project name, inviter email), use `selectinload` to eagerly load ORM relationships, then construct the Pydantic response manually
+- Frontend role gate: `canEdit = ['owner', 'admin', 'editor'].includes(project?.my_role ?? '')` — use this pattern to hide mutating UI controls from viewers
 
 ## 2026-02-21 - US-001
-- What was implemented: Created three SQLAlchemy models (`Sequence`, `SequenceMeasure`, `SequenceBeat`) in `backend/models/sequence.py`. Added `sequence` back-reference to `Song` model. Created Alembic migration `c3f2a1b4d5e6_add_sequence_tables.py`.
-- Files changed:
-  - `backend/models/sequence.py` (new)
-  - `backend/models/__init__.py` (added Sequence, SequenceMeasure, SequenceBeat exports)
-  - `backend/models/song.py` (added `sequence` relationship with `uselist=False`)
-  - `backend/alembic/versions/c3f2a1b4d5e6_add_sequence_tables.py` (new)
+- Created `ProjectCollaborator` SQLAlchemy model in `backend/models/collaborator.py`
+  - `CollaboratorRole` StrEnum: viewer, editor, admin
+  - `CollaboratorStatus` StrEnum: pending, accepted, declined
+  - Unique constraint on `(project_id, invitee_id)`
+  - `invitee_id` has no CASCADE delete (records retained if user deleted)
+  - `inviter_id` has CASCADE delete
+- Added `collaborators` relationship to `Project` model (cascade all, delete-orphan)
+- Updated `backend/models/__init__.py` to export new model and enums
+- Created Alembic migration `a1b2c3d4e5f6_add_project_collaborators_table.py`
+  - Manually creates `collaborator_role` and `collaborator_status` PG enums
+  - Downgrade drops table then enums
 - **Learnings for future iterations:**
-  - The venv is at `backend/.venv/` — use `.venv/bin/pytest`, `.venv/bin/ruff`, `.venv/bin/alembic`
-  - Migration files must use `postgresql.UUID(as_uuid=True)` from `sqlalchemy.dialects`, not just `sa.UUID`
-  - `sequence_beat.chord_id` uses `ondelete="SET NULL"` (not CASCADE) since removing a chord shouldn't destroy beat slots
-  - `UniqueConstraint` in `__table_args__` must be a tuple — trailing comma required for single-element tuple
-  - Ruff line length is 100; watch for long `__table_args__` lines
+  - Use `.venv/bin/ruff check .` from backend dir for linting
+  - Ruff config: line-length 100, target py311, rules E/F/I/N/W/UP
+  - When adding new model with multiple FKs to same table, specify `foreign_keys=[col]` on each relationship
+  - `invitee_id` deliberately has no `ondelete` to retain collaborator records after user deletion
 ---
 
 ## 2026-02-21 - US-002
-- What was implemented: REST API endpoints for sequence CRUD (`GET`, `POST`, `PUT`, `DELETE /api/songs/{song_id}/sequence`). Pydantic schemas for request/response. 17 new tests covering all endpoints and auth scenarios.
-- Files changed:
-  - `backend/schemas/sequence.py` (new) — SequenceCreate, SequenceUpdate, SequenceResponse, nested measure/beat schemas
-  - `backend/routers/sequence.py` (new) — 4 endpoints with auth + ownership checks
-  - `backend/main.py` (added sequence_router)
-  - `backend/tests/test_sequence.py` (new) — 17 tests
+- Cleaned up `backend/routers/collaborators.py` (moved inline `CollaboratorRole` import to top-level, simplified `or_` to direct email lookup since User has no username field)
+- Created `backend/schemas/collaborator.py` with `CollaboratorInviteRequest` and `CollaboratorResponse` Pydantic models
+- Created `backend/tests/test_collaborators.py` with 8 tests covering all acceptance criteria
+- Already registered `collaborators_router` in `main.py` under `/api/projects` prefix
 - **Learnings for future iterations:**
-  - SQLAlchemy `default=uuid.uuid4` runs at INSERT time, not Python construction — pass `id=uuid.uuid4()` explicitly when the id is needed before flush
-  - For bulk DELETE+recreate in PUT: delete child records (beats) first with `db.execute(delete(...))`, then parent (measures) — required for SQLite FK compatibility in tests
-  - `selectinload(Sequence.measures).selectinload(SequenceMeasure.beats)` chains work correctly for nested eager loading
-  - When deleting with `db.delete(sequence)` and ORM cascade, load the full relationship tree with `selectinload` first so SQLAlchemy knows what to cascade-delete in SQLite
----
-
-## 2026-02-21 - US-004
-- What was implemented: On page load, fetches existing sequence via `GET /api/songs/{id}/sequence`; if 404 initializes with 4 empty measures in 4/4. "Save Sequence" button sends full state to `PUT /api/songs/{id}/sequence`; if 404 (no sequence yet) first POSTs to create then PUTs. Success/error toasts auto-dismiss after 3 seconds.
-- Files changed:
-  - `frontend/src/types/sequence.ts` (added `SequenceBeatApiResponse`, `SequenceMeasureApiResponse`, `SequenceApiResponse` types)
-  - `frontend/src/pages/SongDetail.tsx` (mutable sequence state, `fetchSequence` callback, `handleSaveSequence`, toast state, Save Sequence button, toast UI)
-- **Learnings for future iterations:**
-  - Toast pattern: `useState<{ message: string; type: 'success' | 'error' } | null>(null)` + `setTimeout(() => setToast(null), 3000)` — simple inline approach without a library
-  - PUT before POST pattern: try PUT first, if 404 then POST to create + PUT again — avoids tracking `sequenceExists` before the first load
-  - Sort API response arrays by position/beat_position before mapping — backend may not guarantee order
-  - TypeScript strict mode: adding setters to useState is fine as long as all setters are actually used (e.g., in fetchSequence callbacks)
-  - `SequenceApiResponse` placed in `src/types/sequence.ts` (not the component file) to avoid ESLint `only-export-components` issues
----
-
-## 2026-02-21 - US-005
-- What was implemented: Each chord card in the chord list is now a drag source (already via `useSortable`). Each beat slot in `ChordStaff` uses `useDroppable` from `@dnd-kit/core`. Dragging a chord onto a beat slot sets that beat's `chord_id` and displays the chord name. Slots highlight blue on hover. Single `DndContext` wraps both chord list and staff. `chordMap` passed to `ChordStaff` for name display.
-- Files changed:
-  - `frontend/src/components/ChordStaff.tsx` — added `useDroppable` to `BeatSlot`, `chordMap` prop for name lookup, `measureId` prop threading, `isOver` visual highlight
-  - `frontend/src/pages/SongDetail.tsx` — lifted `DndContext` to wrap both chord list and staff, updated `handleDragEnd` to handle beat slot drops, passes `chordMap` to `ChordStaff`
-- **Learnings for future iterations:**
-  - `useSortable` chord cards automatically act as drag sources for the shared `DndContext` — no extra `useDraggable` needed
-  - Beat slot IDs use `beat|${measureId}|${beatPosition}` with `|` separator; UUID hyphens make `-` splitting unreliable
-  - Cast `over.data.current` to `{ type?: string; measureId?: string; beatPosition?: number }` for TypeScript safety
-  - `Object.fromEntries(chords.map(...))` inline in JSX is fine for small chord lists; avoids needing `useMemo`
-  - Browser verification not done (no browser tool) — manual check recommended
+  - `User` model has no `username` field — identifier lookup is email-only
+  - Tests use in-memory SQLite via `sqlite+aiosqlite://` — all SQLAlchemy models must be imported into `Base.metadata` for tables to be created
+  - Admin-can-invite path requires an accepted collaborator record; pending status alone is insufficient for elevated permissions
 ---
 
 ## 2026-02-21 - US-003
-- What was implemented: `ChordStaff` component renders a music-staff-style display with time signature, barlines, multiple lines of measures, and empty beat slots (dashed outlines). Added "Chord Sequence" section below chord list on song detail page.
-- Files changed:
-  - `frontend/src/components/ChordStaff.tsx` (new) — staff display component with `TimeSignature`, `Barline`, `BeatSlot`, `Measure` sub-components
-  - `frontend/src/types/sequence.ts` (new) — `SequenceBeat`, `SequenceMeasure` interfaces + `buildDefaultMeasures` utility
-  - `frontend/src/pages/SongDetail.tsx` (updated) — imported ChordStaff, added sequence state (4 measures, 4/4), rendered Chord Sequence section below chord list
+- Added `CollaboratorStatusUpdateRequest` schema to `backend/schemas/collaborator.py`
+- Added `status_router` (separate APIRouter) in `backend/routers/collaborators.py` for standalone `/api/collaborators/{id}` PATCH endpoint
+- Added PATCH `/collaborators/{collaborator_id}` (via status_router) — invitee-only, 400 if status=pending
+- Added GET `/{project_id}/collaborators` — owner or accepted admin only
+- Added DELETE `/{project_id}/collaborators/{collaborator_id}` — owner only, 400 if invitee is project owner
+- Registered `status_router` in `backend/main.py` at `/api` prefix
+- Added 11 new tests covering all acceptance criteria (19 total in test file, all passing)
 - **Learnings for future iterations:**
-  - ESLint rule `react-refresh/only-export-components` forbids exporting non-component values (types, functions) from component files — put shared types/utils in `src/types/` or `src/utils/`
-  - Frontend typecheck command: `npx tsc -b --noEmit` (run from `frontend/` dir); no separate `typecheck` npm script
-  - TypeScript strict `noUnusedLocals` means unused state setters (e.g., `setSequenceMeasures`) must be removed from destructuring until actually needed
-  - Browser verification was not done (no browser tool available) — manual check recommended
+  - Use two `APIRouter` variables in the same file when routes need different URL prefixes
+  - The PATCH status endpoint is at `/api/collaborators/{id}` (not under `/api/projects`)
+  - PATCH role endpoint (US-004) will be at `/api/projects/{project_id}/collaborators/{id}` — use the existing `router`
+  - Test fixture `invitation` creates a pending collaborator record for reuse across tests
+---
+
+## 2026-02-21 - US-004
+- Added `CollaboratorRoleUpdateRequest` Pydantic schema to `backend/schemas/collaborator.py`
+- Added PATCH `/{project_id}/collaborators/{collaborator_id}` endpoint to `backend/routers/collaborators.py`
+  - Owner or accepted admin can change role; returns 403 otherwise
+  - Returns 404 if collaborator record not found on this project
+  - Role change works regardless of collaborator status (pending or accepted)
+- Added 5 new tests (24 total in test_collaborators.py, all passing)
+- **Learnings for future iterations:**
+  - Role update endpoint is at `/api/projects/{project_id}/collaborators/{id}` using the existing `router`
+  - The `status_router` is only for the status PATCH at `/api/collaborators/{id}`
+  - Admin authorization check requires both `status == accepted` AND `role == admin`
+---
+
+## 2026-02-21 - US-005
+- Added `ProjectRole` StrEnum (owner/admin/editor/viewer) to `backend/models/collaborator.py`
+- Created `backend/auth/project_access.py` with:
+  - `check_project_access(project_id, current_user, db)` — plain async function returning `(Project, ProjectRole)` or raising 403/404
+  - `get_project_access(project_id, ...)` — FastAPI Depends wrapper for project-scoped endpoints
+- Updated `schemas/project.py`: added `my_role: ProjectRole | None = None` to `ProjectResponse`
+- Updated `routers/projects.py`:
+  - `list_projects`: queries owned + accepted collaborations, returns `my_role` for each
+  - `get_project`: uses `get_project_access` Depends, returns `my_role`; accessible to all collaborators
+  - `update_project`/`delete_project`: owner-only; editors get 403
+- Updated `routers/songs.py`, `routers/chords.py`, `routers/sequence.py`:
+  - Replaced `_get_owned_*` helpers with `_get_song_with_role`/`_get_chord_with_role` returning `(resource, role)`
+  - Read endpoints (list/get): any role (owner/admin/editor/viewer)
+  - Mutate endpoints (create/update/delete): editor or above; viewer gets 403
+- Updated `routers/collaborators.py`: replaced inline owner-check logic with `check_project_access`
+- Created `backend/tests/test_rbac.py` with 17 tests covering all acceptance criteria (137 total, all passing)
+- **Learnings for future iterations:**
+  - `ProjectResponse.my_role` requires explicit `.model_copy(update={"my_role": role})` since ORM objects don't have this field
+  - `get_project_access` works as a FastAPI Depends when `project_id` is a path parameter; for song/chord routes use `check_project_access` directly
+  - `_EDITOR_ROLES = {owner, admin, editor}` pattern for mutation checks; `_ADMIN_ROLES = {owner, admin}` for collaborator management
 ---
 
 ## 2026-02-21 - US-006
-- What was implemented: Clicking a filled beat slot now opens a small popover with a "Remove" option. Selecting "Remove" clears the chord from that slot (sets chord_id to null), reverting it to the empty dashed placeholder. A fixed backdrop div closes the popover when clicking outside.
-- Files changed:
-  - `frontend/src/components/ChordStaff.tsx` — added `useState` import; `BeatSlot` now has `showMenu` state + popover UI + backdrop; `Measure` and `ChordStaff` thread `onRemoveBeat` callback
-  - `frontend/src/pages/SongDetail.tsx` — added `handleRemoveBeat` function; passes `onRemoveBeat` to `ChordStaff`
+- Added `PendingInvitationResponse` Pydantic schema to `backend/schemas/collaborator.py`
+  - Includes: id, project_id, project_name, inviter_email, role, status, created_at, updated_at
+- Added `GET /collaborators/pending` endpoint to `status_router` in `backend/routers/collaborators.py`
+  - Uses `selectinload` for `project` and `inviter` relationships to eager-load related data
+  - Constructs `PendingInvitationResponse` manually from ORM object + related data
+- Added 3 new tests to `backend/tests/test_collaborators.py` (140 total, all passing)
+- Created `frontend/src/components/PendingInvitationsModal.tsx`
+  - Fetches `GET /api/collaborators/pending` on mount
+  - Shows each invitation: project name, inviter email, assigned role
+  - Accept/Decline buttons call `PATCH /api/collaborators/{id}` and remove invitation from list
+  - Dismiss button (X) closes modal without accepting/declining
+  - Hidden automatically when no pending invitations (returns null if loading or empty)
+- Updated `frontend/src/pages/Dashboard.tsx` to render `PendingInvitationsModal` (controlled by `showInvitationsModal` state)
 - **Learnings for future iterations:**
-  - Popover pattern: `useState<boolean>` + `fixed inset-0 z-10` backdrop div + `absolute` popover with `z-20`; toggling on click, closing on backdrop click
-  - Beat slot click only triggers menu when `beat.chord_id` is non-null; empty slots don't react to click
-  - Filled beat slots get `cursor-pointer hover:border-gray-400` to signal interactivity
-  - Wrapping `BeatSlot` content in a `relative flex-1` outer div allows absolute popover positioning while preserving flex layout in the measure's `flex gap-1` container
-  - Browser verification not done (no browser tool) — manual check recommended
----
-
-## 2026-02-21 - US-008
-- What was implemented: Time signature selector (numerator 2–12, denominator 2/4/8/16) displayed above the staff. Changing the numerator immediately updates beat count in every measure (adds empty beats when increasing, trims when decreasing). If decreasing numerator would lose chords, shows inline confirmation dialog before applying. Denominator change updates display only. Both values persisted on Save Sequence.
-- Files changed:
-  - `frontend/src/pages/SongDetail.tsx` — added `pendingNumerator` state, `applyNumeratorChange`, `handleNumeratorChange`, `handleDenominatorChange` functions; added time signature selector UI and confirmation dialog above ChordStaff
-- **Learnings for future iterations:**
-  - When expanding beats (numerator increases), build from existing beats + fill gaps by position; sort by beat_position after
-  - Confirmation dialog pattern: `useState<number | null>` for the pending value; show dialog when set, apply or cancel buttons reset it to null
-  - Denominator change is pure display — no beat count changes needed (beat count is determined by numerator)
-  - Browser verification not done (no browser tool) — manual check recommended
+  - Frontend typecheck: `npx tsc --noEmit` (run from frontend/ dir); no "typecheck" script in package.json
+  - `PendingInvitationsModal` auto-hides when `invitations.length === 0` — US-007 can leverage this for "close when all resolved"
+  - `selectinload` requires importing from `sqlalchemy.orm`; adds to `status_router`'s endpoint which is mounted at `/api`
+  - The modal is rendered in a React fragment alongside AppLayout in Dashboard's return, using `fixed inset-0 z-50` for overlay
 ---
 
 ## 2026-02-21 - US-007
-- What was implemented: '+ Add Measure' button in the Chord Sequence header appends a new empty measure (using `crypto.randomUUID()` for client-side id). Each measure now has a `×` remove button; removing an empty measure removes it immediately; removing a measure with chords shows inline confirmation dialog with message 'This will remove all chords in this measure'. Remaining measures are re-positioned 0-based after removal. Staff lines reflow automatically since the existing `slice(i, i + measuresPerLine)` loop naturally handles new measure count.
-- Files changed:
-  - `frontend/src/components/ChordStaff.tsx` — added `onRemoveMeasure` to `ChordStaffProps` and `Measure` props; added `confirmingRemove` state + `×` button + inline confirmation UI to `Measure`
-  - `frontend/src/pages/SongDetail.tsx` — added `handleAddMeasure` and `handleRemoveMeasure` functions; added '+ Add Measure' button in section header; passed `onRemoveMeasure` to `ChordStaff`
+- Added `onAccept?: () => void` prop to `PendingInvitationsModal`
+  - Called after successful PATCH accept response to trigger project list refresh
+- Updated `Dashboard.tsx` to pass `onAccept={fetchProjects}` to the modal
+  - Accepted project appears in dashboard immediately without page reload
+- Modal already auto-hides when `invitations.length === 0` (from US-006) — satisfies "closes automatically when all resolved"
 - **Learnings for future iterations:**
-  - `crypto.randomUUID()` is available in modern browsers and typed in TypeScript lib.dom.d.ts — use it for generating client-side temporary IDs
-  - Inline confirmation pattern (like `confirmingDelete` in SortableChordCard) works well for per-measure remove buttons; avoids modal complexity
-  - Staff line reflow is automatic — the `measures.slice(i, i + measuresPerLine)` loop in `ChordStaff` handles any measure count without additional logic
-  - Re-positioning after removal: `.filter(...).map((m, index) => ({ ...m, position: index }))` keeps positions 0-based and contiguous
-  - Browser verification not done (no browser tool) — manual check recommended
+  - `PendingInvitationsModal` already had Accept/Decline API calls from US-006; US-007 only needed the dashboard refresh callback
+  - Pattern: pass `fetchProjects` (useCallback) as `onAccept` prop — safe to call multiple times without infinite loop risk
+---
+
+## 2026-02-21 - US-008
+- Added `shared_by: str | None = None` to `ProjectResponse` in `backend/schemas/project.py`
+- Updated `list_projects` in `backend/routers/projects.py` to join the inviter User on `ProjectCollaborator.inviter_id` and include `inviter.email` as `shared_by` in the response
+- Updated `frontend/src/pages/Dashboard.tsx`:
+  - Added `my_role`, `shared_by`, and `user_id` to `Project` interface
+  - Derived `ownedProjects` and `sharedProjects` from filtered project list
+  - Extracted `renderProjectCard` helper for shared card rendering logic
+  - Shared projects show a purple "Shared" badge next to the project title
+  - Shared projects show "Shared by [email]" instead of the updated date
+  - Dashboard renders two sections: "My Projects" and "Shared with Me" (section headers only visible when both types exist)
+  - Rename/Delete buttons are hidden for shared projects (role enforcement in UI deferred to US-009)
+- **Learnings for future iterations:**
+  - `list_projects` joins `User` directly on `ProjectCollaborator.inviter_id` — SQLAlchemy returns `(collab, project, inviter)` tuples
+  - `shared_by` field is `None` for owned projects, populated with inviter email for shared projects
+  - Dashboard section headers ("My Projects" / "Shared with Me") only shown when both sections have entries — avoids redundant heading when only one type exists
+  - `renderProjectCard` as a helper function (not a React component) works fine with `key` on the returned div — React handles keys correctly
+---
+
+## 2026-02-21 - US-009
+- Updated `frontend/src/components/ChordStaff.tsx`:
+  - Added optional `canEdit?: boolean` prop (default `true`) to `ChordStaffProps`, `Measure`, and `BeatSlot`
+  - Hide remove-measure (×) button, repeat start/end toggles, and ending number selectors when `!canEdit`
+  - Hide remove-beat popup menu when `!canEdit`; beat slot click does nothing when `!canEdit`
+- Updated `frontend/src/pages/ProjectDetail.tsx`:
+  - Added `my_role: string | null` to `Project` interface
+  - Derived `canEdit = ['owner', 'admin', 'editor'].includes(project?.my_role ?? '')`
+  - Added role badge (color-coded: owner=blue, admin=purple, editor=green, viewer=gray) below error section
+  - "New Song" button and song create form hidden when `!canEdit`
+  - "Rename" and "Delete" buttons on song rows hidden when `!canEdit`
+- Updated `frontend/src/pages/SongDetail.tsx`:
+  - Added `my_role: string | null` to `Project` interface
+  - Added `canEdit: boolean` prop to `SortableChordCardProps`
+  - Drag handle, move up/down, delete, and chord name click-to-edit hidden when `!canEdit`
+  - Guitar neck shown as static div (not clickable button) when `!canEdit`
+  - "Add Chord" button hidden when `!canEdit` (both in empty state and non-empty state)
+  - Sequence section: "Add Measure", "Save Sequence", and time signature selectors hidden when `!canEdit`
+  - Passed `canEdit` to `ChordStaff` component
+- Typecheck and lint pass (no errors)
+- **Learnings for future iterations:**
+  - `canEdit = ['owner', 'admin', 'editor'].includes(project?.my_role ?? '')` is the standard pattern for mutation permission checks in the frontend
+  - `ChordStaff.canEdit` flows down through `Measure` and `BeatSlot` — all three components need the prop
+  - Role badge colors: owner=blue-100/700, admin=purple-100/700, editor=green-100/700, viewer=gray-100/600
+  - When `project` might be null (still loading), use `project?.my_role ?? ''` for safe access
+---
+
+## 2026-02-21 - US-010
+- Added `CollaboratorDetailResponse` Pydantic schema to `backend/schemas/collaborator.py`
+  - Includes `invitee_email` (populated via selectinload on `invitee` relationship)
+- Updated `list_collaborators` endpoint in `backend/routers/collaborators.py`
+  - Uses `selectinload(ProjectCollaborator.invitee)` to eager-load invitee User
+  - Returns `CollaboratorDetailResponse` with `invitee_email` instead of plain `CollaboratorResponse`
+- Created `frontend/src/pages/CollaboratorsPage.tsx`
+  - Fetches `GET /api/projects/{id}/collaborators` on mount
+  - Lists collaborators with email, role badge (color-coded), status badge (green/yellow/gray)
+  - Accepted rows are full-opacity; pending/declined rows use `opacity-75` and `bg-gray-50`
+  - Invite form: email input + role dropdown (Viewer/Editor/Admin) + Submit button
+  - POST `/api/projects/{id}/collaborators` on submit; re-fetches list on success
+  - 404 → "No user found" error; 409 → "already has pending/accepted" error
+- Updated `frontend/src/App.tsx`: added route `/projects/:id/collaborators`
+- Updated `frontend/src/pages/ProjectDetail.tsx`:
+  - Added `canManage = ['owner', 'admin'].includes(project?.my_role ?? '')` derived flag
+  - Added "Collaborators" link button next to role badge, visible only when `canManage`
+- **Learnings for future iterations:**
+  - `GET /projects/{id}/collaborators` now returns `CollaboratorDetailResponse` (with `invitee_email`) not plain `CollaboratorResponse`
+  - `canManage = ['owner', 'admin'].includes(project?.my_role ?? '')` for admin-gated UI controls
+  - Status visual distinction: accepted rows full white, pending/declined rows `bg-gray-50 opacity-75`
+---
+
+## 2026-02-21 - US-011
+- Updated `frontend/src/pages/CollaboratorsPage.tsx`:
+  - Added `confirmRemoveId` and `removing` state for confirmation dialog flow
+  - Added `handleRemove(collaboratorId)` async function: calls DELETE `/api/projects/{id}/collaborators/{id}`, removes row from local state on success
+  - Added "Remove" button (red, text-xs) on each collaborator row, visible only when `isOwner`
+  - Added confirmation dialog (fixed overlay, modal card) showing "Remove [email] from this project?" with Cancel and Remove buttons
+- Backend DELETE endpoint was already implemented in US-003 — no backend changes needed
+- **Learnings for future iterations:**
+  - Confirmation dialog uses IIFE pattern `{confirmRemoveId && (() => { ... })()}` to access the target collaborator's email from state
+  - Remove button is owner-only (`isOwner`); the `isOwner` variable was already derived in the component
+  - After DELETE 204, row is removed from `collaborators` array via `setCollaborators(prev => prev.filter(...))` — no re-fetch needed
+---
+
+## 2026-02-21 - US-012
+- Updated `frontend/src/pages/CollaboratorsPage.tsx`:
+  - Added `changingRoleId` state to track which row is updating (for disabled state)
+  - Added `handleRoleChange(collaboratorId, newRole)` async function: calls PATCH `/api/projects/{id}/collaborators/{id}` with `{ role: newRole }`, updates row in local state on success
+  - In each collaborator row: accepted rows show an inline `<select>` dropdown (Viewer/Editor/Admin) when `canManage`; pending/declined rows show the static role badge
+  - Dropdown is disabled while the PATCH request is in flight (`changingRoleId === collab.id`)
+- Backend PATCH role endpoint was already implemented in US-004 — no backend changes needed
+- **Learnings for future iterations:**
+  - Inline role change: replace the badge with a `<select>` only when `isAccepted && canManage`; otherwise keep the badge — clean conditional rendering
+  - `setCollaborators(prev => prev.map(c => c.id === id ? {...c, role: newRole} : c))` pattern for optimistic update after PATCH
+  - `changingRoleId` string state (not boolean) allows per-row disabled state without extra complexity
 ---

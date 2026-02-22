@@ -3,9 +3,11 @@ import { useParams, Link } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import AppLayout from '../components/AppLayout'
 
+
 interface Project {
   id: string
   name: string
+  my_role: string | null
 }
 
 interface Song {
@@ -128,6 +130,16 @@ export default function ProjectDetail() {
     )
   }
 
+  const canEdit = ['owner', 'admin', 'editor'].includes(project?.my_role ?? '')
+  const canManage = ['owner', 'admin'].includes(project?.my_role ?? '')
+
+  const roleBadgeColors: Record<string, string> = {
+    owner: 'bg-blue-100 text-blue-700',
+    admin: 'bg-purple-100 text-purple-700',
+    editor: 'bg-green-100 text-green-700',
+    viewer: 'bg-gray-100 text-gray-600',
+  }
+
   return (
     <AppLayout
       title={project?.name || 'Project'}
@@ -148,8 +160,26 @@ export default function ProjectDetail() {
         </div>
       )}
 
+      {project?.my_role && (
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${roleBadgeColors[project.my_role] ?? 'bg-gray-100 text-gray-600'}`}
+          >
+            {project.my_role}
+          </span>
+          {canManage && (
+            <Link
+              to={`/projects/${id}/collaborators`}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Collaborators
+            </Link>
+          )}
+        </div>
+      )}
+
       <div className="mb-6">
-        {showCreateForm ? (
+        {canEdit && (showCreateForm ? (
           <form
             onSubmit={handleCreate}
             className="flex flex-col gap-2 sm:flex-row"
@@ -189,7 +219,7 @@ export default function ProjectDetail() {
           >
             New Song
           </button>
-        )}
+        ))}
       </div>
 
       {songs.length === 0 ? (
@@ -274,20 +304,22 @@ export default function ProjectDetail() {
                       Updated {formatDate(song.updated_at)}
                     </p>
                   </Link>
-                  <div className="flex shrink-0 gap-1 sm:gap-2">
-                    <button
-                      onClick={() => startEditing(song)}
-                      className="rounded-md px-2 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 sm:px-3"
-                    >
-                      Rename
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirmId(song.id)}
-                      className="rounded-md px-2 py-1.5 text-sm text-red-500 hover:bg-red-50 hover:text-red-700 sm:px-3"
-                    >
-                      Delete
-                    </button>
-                  </div>
+                  {canEdit && (
+                    <div className="flex shrink-0 gap-1 sm:gap-2">
+                      <button
+                        onClick={() => startEditing(song)}
+                        className="rounded-md px-2 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 sm:px-3"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmId(song.id)}
+                        className="rounded-md px-2 py-1.5 text-sm text-red-500 hover:bg-red-50 hover:text-red-700 sm:px-3"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

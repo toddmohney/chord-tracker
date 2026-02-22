@@ -27,3 +27,6 @@ class Project(Base):
     songs: Mapped[list["Song"]] = relationship(  # noqa: F821
         back_populates="project", cascade="all, delete-orphan"
     )
+    collaborators: Mapped[list["ProjectCollaborator"]] = relationship(  # noqa: F821
+        back_populates="project", cascade="all, delete-orphan"
+    )

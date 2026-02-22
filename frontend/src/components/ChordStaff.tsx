@@ -8,6 +8,7 @@ export interface ChordStaffProps {
   measuresPerLine: number
   measures: SequenceMeasure[]
   chordMap: Record<string, string>
+  canEdit?: boolean
   onRemoveBeat: (measureId: string, beatPosition: number) => void
   onRemoveMeasure: (measureId: string) => void
   onToggleRepeatStart: (measureId: string) => void
@@ -28,11 +29,13 @@ function BeatSlot({
   beat,
   measureId,
   chordMap,
+  canEdit = true,
   onRemoveBeat,
 }: {
   beat: SequenceBeat
   measureId: string
   chordMap: Record<string, string>
+  canEdit?: boolean
   onRemoveBeat: (measureId: string, beatPosition: number) => void
 }) {
   const [showMenu, setShowMenu] = useState(false)
@@ -45,7 +48,7 @@ function BeatSlot({
 
   return (
     <div className="relative flex-1">
-      {showMenu && (
+      {showMenu && canEdit && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
           <div className="absolute bottom-full left-1/2 z-20 mb-1 -translate-x-1/2 rounded border border-gray-200 bg-white shadow-md">
@@ -64,12 +67,12 @@ function BeatSlot({
       )}
       <div
         ref={setNodeRef}
-        onClick={() => { if (beat.chord_id) setShowMenu((v) => !v) }}
+        onClick={() => { if (beat.chord_id && canEdit) setShowMenu((v) => !v) }}
         className={`flex h-12 w-full items-center justify-center rounded border text-xs transition-colors ${
           isOver
             ? 'border-blue-400 bg-blue-50'
             : beat.chord_id
-              ? 'cursor-pointer border-gray-300 bg-white hover:border-gray-400'
+              ? `border-gray-300 bg-white ${canEdit ? 'cursor-pointer hover:border-gray-400' : ''}`
               : 'border-dashed border-gray-300 bg-white text-gray-400'
         }`}
         aria-label={`Beat ${beat.beat_position}`}
@@ -104,6 +107,7 @@ function RepeatDots() {
 function Measure({
   measure,
   chordMap,
+  canEdit = true,
   onRemoveBeat,
   onRemoveMeasure,
   onToggleRepeatStart,
@@ -112,6 +116,7 @@ function Measure({
 }: {
   measure: SequenceMeasure
   chordMap: Record<string, string>
+  canEdit?: boolean
   onRemoveBeat: (measureId: string, beatPosition: number) => void
   onRemoveMeasure: (measureId: string) => void
   onToggleRepeatStart: (measureId: string) => void
@@ -132,38 +137,40 @@ function Measure({
         ) : (
           <div />
         )}
-        {confirmingRemove ? (
-          <span className="flex items-center gap-1 text-xs">
+        {canEdit && (
+          confirmingRemove ? (
+            <span className="flex items-center gap-1 text-xs">
+              <button
+                type="button"
+                onClick={() => { onRemoveMeasure(measure.id); setConfirmingRemove(false) }}
+                className="rounded bg-red-600 px-1.5 py-0.5 text-white hover:bg-red-700"
+              >
+                Remove
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingRemove(false)}
+                className="rounded border border-gray-300 px-1.5 py-0.5 text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </span>
+          ) : (
             <button
               type="button"
-              onClick={() => { onRemoveMeasure(measure.id); setConfirmingRemove(false) }}
-              className="rounded bg-red-600 px-1.5 py-0.5 text-white hover:bg-red-700"
+              onClick={() => {
+                if (hasChords) {
+                  setConfirmingRemove(true)
+                } else {
+                  onRemoveMeasure(measure.id)
+                }
+              }}
+              className="text-xs leading-none text-gray-400 hover:text-red-500"
+              aria-label="Remove measure"
             >
-              Remove
+              ×
             </button>
-            <button
-              type="button"
-              onClick={() => setConfirmingRemove(false)}
-              className="rounded border border-gray-300 px-1.5 py-0.5 text-gray-600 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              if (hasChords) {
-                setConfirmingRemove(true)
-              } else {
-                onRemoveMeasure(measure.id)
-              }
-            }}
-            className="text-xs leading-none text-gray-400 hover:text-red-500"
-            aria-label="Remove measure"
-          >
-            ×
-          </button>
+          )
         )}
       </div>
       {/* Confirmation message */}
@@ -178,11 +185,13 @@ function Measure({
             beat={beat}
             measureId={measure.id}
             chordMap={chordMap}
+            canEdit={canEdit}
             onRemoveBeat={onRemoveBeat}
           />
         ))}
       </div>
       {/* Repeat annotation toggles + ending number selector */}
+      {canEdit && (
       <div className="flex items-center justify-between mt-0.5">
         <button
           type="button"
@@ -227,6 +236,7 @@ function Measure({
           :|
         </button>
       </div>
+      )}
     </div>
   )
 }
@@ -237,6 +247,7 @@ export default function ChordStaff({
   measuresPerLine,
   measures,
   chordMap,
+  canEdit = true,
   onRemoveBeat,
   onRemoveMeasure,
   onToggleRepeatStart,
@@ -326,6 +337,7 @@ export default function ChordStaff({
                 <Measure
                   measure={measure}
                   chordMap={chordMap}
+                  canEdit={canEdit}
                   onRemoveBeat={onRemoveBeat}
                   onRemoveMeasure={onRemoveMeasure}
                   onToggleRepeatStart={onToggleRepeatStart}
