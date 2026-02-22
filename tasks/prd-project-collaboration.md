@@ -211,5 +211,8 @@ Allow project owners to invite other registered users to collaborate on their pr
 ## Open Questions
 
 - Should Admins be able to change a collaborator's role after invitation (e.g., promote a Viewer to Editor), or is the role fixed at invitation time?
+    - yes
 - Should there be a maximum number of collaborators per project?
+    - no
 - If a user's account is deleted, should their collaborations be removed automatically via cascade?
+    - no

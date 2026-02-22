@@ -1,0 +1,205 @@
+{
+  "project": "Chord Tracker",
+  "branchName": "ralph/project-collaboration",
+  "description": "Project Collaboration with Role-Based Access - Allow project owners to invite other users to collaborate with Viewer, Editor, and Admin roles, with in-app invitation notifications and role-enforced permissions.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add collaborators database schema",
+      "description": "As a developer, I need a database table to store project collaborations so that role and invitation state can persist.",
+      "acceptanceCriteria": [
+        "Create `project_collaborators` table with columns: `id` (UUID PK), `project_id` (FK → projects), `inviter_id` (FK → users), `invitee_id` (FK → users), `role` (enum: `viewer` | `editor` | `admin`), `status` (enum: `pending` | `accepted` | `declined`), `created_at`, `updated_at`",
+        "Add unique constraint on `(project_id, invitee_id)` to prevent duplicate invitations",
+        "No cascade delete on `invitee_id` — collaborator records are retained if the user's account is deleted",
+        "Generate and run Alembic migration successfully",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Invite a collaborator API endpoint",
+      "description": "As a project owner or Admin, I want to invite another user by email or username and assign them a role so they can collaborate on my project.",
+      "acceptanceCriteria": [
+        "POST `/projects/{project_id}/collaborators` endpoint accepts `{ \"identifier\": \"<email or username>\", \"role\": \"viewer\" | \"editor\" | \"admin\" }`",
+        "API looks up user by email first, then by username if no email match found",
+        "Returns 404 if no user matches the identifier",
+        "Returns 409 if that user already has a `pending` or `accepted` collaboration on this project",
+        "Returns 403 if the requesting user is not the Owner or Admin of the project",
+        "Creates a `project_collaborators` record with `status: \"pending\"`",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Accept/decline invitation and collaborator list/remove API endpoints",
+      "description": "As an invitee, I want to accept or decline a collaboration invitation; as an owner, I want to list and remove collaborators.",
+      "acceptanceCriteria": [
+        "PATCH `/collaborators/{collaborator_id}` endpoint accepts `{ \"status\": \"accepted\" | \"declined\" }` and updates the record",
+        "Only the invitee (the user referenced by `invitee_id`) can change status; returns 403 otherwise",
+        "Cannot transition from `accepted` or `declined` back to `pending`; returns 400 if attempted",
+        "GET `/projects/{project_id}/collaborators` returns the collaborator list, accessible only to the project Owner and Admins",
+        "DELETE `/projects/{project_id}/collaborators/{collaborator_id}` removes the collaboration record; only Owner can remove; returns 403 otherwise",
+        "Owner cannot remove themselves via this endpoint",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Change collaborator role API endpoint",
+      "description": "As a project owner or Admin, I want to change an existing collaborator's role after invitation so I can adjust their access level over time.",
+      "acceptanceCriteria": [
+        "PATCH `/projects/{project_id}/collaborators/{collaborator_id}` accepts `{ \"role\": \"viewer\" | \"editor\" | \"admin\" }` and updates the record",
+        "Only the project Owner or an Admin can change a collaborator's role; returns 403 otherwise",
+        "Returns 404 if the collaborator record does not exist on this project",
+        "Role change is allowed regardless of the collaborator's current `status` (pending or accepted)",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Enforce role-based permissions on the API",
+      "description": "As a developer, I need the API to enforce access rules based on each user's role so that collaborators cannot perform actions beyond their permission tier.",
+      "acceptanceCriteria": [
+        "A reusable `get_project_access(project_id, current_user)` dependency returns the user's effective role (`owner` | `admin` | `editor` | `viewer`) or raises 403 if they have no access",
+        "All existing project/song/chord endpoints use this dependency instead of the current owner-only check",
+        "Viewer requests to mutating endpoints (POST/PUT/PATCH/DELETE for songs and chords) return 403",
+        "Editor requests to rename a project return 403",
+        "Editor and Viewer requests to invite, remove, or change the role of collaborators return 403",
+        "GET `/projects` returns both owned projects and projects where the user has an `accepted` collaboration",
+        "Project detail API response includes a `my_role` field (`owner` | `admin` | `editor` | `viewer`)",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Display pending invitations banner on login",
+      "description": "As an invitee, I want to see a notification when I log in if I have pending project invitations so I can decide whether to join.",
+      "acceptanceCriteria": [
+        "After login, if the authenticated user has any `pending` invitations, a modal/banner appears listing each: project name, inviter name, and assigned role",
+        "Each invitation shows two buttons: 'Accept' and 'Decline'",
+        "If there are no pending invitations, no modal/banner is shown",
+        "The banner/modal is dismissible without accepting or declining (invitations remain pending)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Accept or decline invitation UI",
+      "description": "As an invitee, I want the Accept and Decline buttons in the invitation banner to call the API and update the UI so my response is persisted.",
+      "acceptanceCriteria": [
+        "Clicking 'Accept' calls PATCH `/collaborators/{collaborator_id}` with `{ \"status\": \"accepted\" }` and removes the invite from the modal",
+        "Clicking 'Decline' calls PATCH `/collaborators/{collaborator_id}` with `{ \"status\": \"declined\" }` and removes the invite from the modal",
+        "On acceptance, the project immediately appears in the user's dashboard without a page reload",
+        "If all invitations are resolved, the modal closes automatically",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Show shared projects on the dashboard",
+      "description": "As an accepted collaborator, I want to see the projects I've been invited to in my dashboard so I can access them easily.",
+      "acceptanceCriteria": [
+        "Dashboard fetches projects from the updated GET `/projects` which includes accepted collaborations",
+        "Shared projects are visually distinguished (e.g., a 'Shared' badge or separate section heading)",
+        "Each shared project shows 'Shared by [inviter name]' beneath the project title",
+        "Clicking a shared project navigates to the project detail page",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Hide and disable UI controls based on role",
+      "description": "As a collaborator, I want the UI to reflect my permissions so I don't attempt actions I'm not allowed to perform.",
+      "acceptanceCriteria": [
+        "Viewer: add/edit/delete buttons for songs and chords are hidden",
+        "Editor: add/edit/delete buttons for songs and chords are visible; project rename and collaborator controls are hidden",
+        "Admin: all controls visible except the 'Delete project' button",
+        "Owner: all controls visible",
+        "Role is sourced from the `my_role` field in the project detail API response",
+        "A small role badge (`Viewer`, `Editor`, `Admin`, `Owner`) is displayed on the project detail page",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Collaborators management page",
+      "description": "As a project owner or Admin, I want a page that lists all collaborators and their invitation status so I can monitor who has access to my project.",
+      "acceptanceCriteria": [
+        "A 'Collaborators' tab or button is visible on the Project Detail page for Owners and Admins only",
+        "The collaborators page lists all collaborators with: name, email or username, assigned role, and invitation status (`pending` | `accepted` | `declined`)",
+        "Pending and declined invitations are visually distinguished from accepted ones (e.g., muted color or badge)",
+        "An invite form is present: text input for email or username and a role dropdown (Viewer, Editor, Admin)",
+        "Submitting the form calls POST `/projects/{project_id}/collaborators` and appends the new invite to the list on success",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Remove a collaborator from the management page",
+      "description": "As a project owner, I want to remove a collaborator from my project so I can revoke their access.",
+      "acceptanceCriteria": [
+        "Each collaborator row on the management page has a 'Remove' button, visible only to the Owner",
+        "Clicking 'Remove' shows a confirmation dialog: 'Remove [name] from this project?'",
+        "Confirming calls DELETE `/projects/{project_id}/collaborators/{collaborator_id}` and removes the row from the list",
+        "After removal, the project no longer appears in the removed user's dashboard (API-enforced)",
+        "The removed user's chords and songs remain intact in the project",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Change collaborator role UI on management page",
+      "description": "As a project owner or Admin, I want to change a collaborator's role directly from the management page so I can adjust their access without removing and re-inviting them.",
+      "acceptanceCriteria": [
+        "Each accepted collaborator row has an inline role dropdown (Viewer, Editor, Admin), visible to Owner and Admins",
+        "Changing the dropdown value calls PATCH `/projects/{project_id}/collaborators/{collaborator_id}` with the new role",
+        "The row updates immediately on success without a page reload",
+        "Pending and declined collaborator rows do not show the role dropdown (role is fixed until accepted)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

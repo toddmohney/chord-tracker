@@ -21,9 +21,6 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE TYPE collaborator_role AS ENUM ('viewer', 'editor', 'admin')")
-    op.execute("CREATE TYPE collaborator_status AS ENUM ('pending', 'accepted', 'declined')")
-
     op.create_table(
         "project_collaborators",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -48,19 +45,8 @@ def upgrade() -> None:
             nullable=False,
             index=True,
         ),
-        sa.Column(
-            "role",
-            sa.Enum("viewer", "editor", "admin", name="collaborator_role", create_type=False),
-            nullable=False,
-        ),
-        sa.Column(
-            "status",
-            sa.Enum(
-                "pending", "accepted", "declined", name="collaborator_status", create_type=False
-            ),
-            nullable=False,
-            server_default="pending",
-        ),
+        sa.Column("role", sa.String(50), nullable=False),
+        sa.Column("status", sa.String(50), nullable=False, server_default="pending"),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -79,5 +65,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("project_collaborators")
-    op.execute("DROP TYPE collaborator_status")
-    op.execute("DROP TYPE collaborator_role")

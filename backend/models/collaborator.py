@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Enum, ForeignKey, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,13 +51,9 @@ class ProjectCollaborator(Base):
         nullable=False,
         index=True,
     )
-    role: Mapped[CollaboratorRole] = mapped_column(
-        Enum(CollaboratorRole, name="collaborator_role"), nullable=False
-    )
+    role: Mapped[CollaboratorRole] = mapped_column(String(50), nullable=False)
     status: Mapped[CollaboratorStatus] = mapped_column(
-        Enum(CollaboratorStatus, name="collaborator_status"),
-        nullable=False,
-        server_default="pending",
+        String(50), nullable=False, server_default="pending"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
