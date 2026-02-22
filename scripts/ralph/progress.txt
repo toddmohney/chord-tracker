@@ -175,3 +175,39 @@ Started: Sat Feb 21 12:30:35 EST 2026
   - Role badge colors: owner=blue-100/700, admin=purple-100/700, editor=green-100/700, viewer=gray-100/600
   - When `project` might be null (still loading), use `project?.my_role ?? ''` for safe access
 ---
+
+## 2026-02-21 - US-010
+- Added `CollaboratorDetailResponse` Pydantic schema to `backend/schemas/collaborator.py`
+  - Includes `invitee_email` (populated via selectinload on `invitee` relationship)
+- Updated `list_collaborators` endpoint in `backend/routers/collaborators.py`
+  - Uses `selectinload(ProjectCollaborator.invitee)` to eager-load invitee User
+  - Returns `CollaboratorDetailResponse` with `invitee_email` instead of plain `CollaboratorResponse`
+- Created `frontend/src/pages/CollaboratorsPage.tsx`
+  - Fetches `GET /api/projects/{id}/collaborators` on mount
+  - Lists collaborators with email, role badge (color-coded), status badge (green/yellow/gray)
+  - Accepted rows are full-opacity; pending/declined rows use `opacity-75` and `bg-gray-50`
+  - Invite form: email input + role dropdown (Viewer/Editor/Admin) + Submit button
+  - POST `/api/projects/{id}/collaborators` on submit; re-fetches list on success
+  - 404 → "No user found" error; 409 → "already has pending/accepted" error
+- Updated `frontend/src/App.tsx`: added route `/projects/:id/collaborators`
+- Updated `frontend/src/pages/ProjectDetail.tsx`:
+  - Added `canManage = ['owner', 'admin'].includes(project?.my_role ?? '')` derived flag
+  - Added "Collaborators" link button next to role badge, visible only when `canManage`
+- **Learnings for future iterations:**
+  - `GET /projects/{id}/collaborators` now returns `CollaboratorDetailResponse` (with `invitee_email`) not plain `CollaboratorResponse`
+  - `canManage = ['owner', 'admin'].includes(project?.my_role ?? '')` for admin-gated UI controls
+  - Status visual distinction: accepted rows full white, pending/declined rows `bg-gray-50 opacity-75`
+---
+
+## 2026-02-21 - US-011
+- Updated `frontend/src/pages/CollaboratorsPage.tsx`:
+  - Added `confirmRemoveId` and `removing` state for confirmation dialog flow
+  - Added `handleRemove(collaboratorId)` async function: calls DELETE `/api/projects/{id}/collaborators/{id}`, removes row from local state on success
+  - Added "Remove" button (red, text-xs) on each collaborator row, visible only when `isOwner`
+  - Added confirmation dialog (fixed overlay, modal card) showing "Remove [email] from this project?" with Cancel and Remove buttons
+- Backend DELETE endpoint was already implemented in US-003 — no backend changes needed
+- **Learnings for future iterations:**
+  - Confirmation dialog uses IIFE pattern `{confirmRemoveId && (() => { ... })()}` to access the target collaborator's email from state
+  - Remove button is owner-only (`isOwner`); the `isOwner` variable was already derived in the component
+  - After DELETE 204, row is removed from `collaborators` array via `setCollaborators(prev => prev.filter(...))` — no re-fetch needed
+---
