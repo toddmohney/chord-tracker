@@ -211,3 +211,16 @@ Started: Sat Feb 21 12:30:35 EST 2026
   - Remove button is owner-only (`isOwner`); the `isOwner` variable was already derived in the component
   - After DELETE 204, row is removed from `collaborators` array via `setCollaborators(prev => prev.filter(...))` — no re-fetch needed
 ---
+
+## 2026-02-21 - US-012
+- Updated `frontend/src/pages/CollaboratorsPage.tsx`:
+  - Added `changingRoleId` state to track which row is updating (for disabled state)
+  - Added `handleRoleChange(collaboratorId, newRole)` async function: calls PATCH `/api/projects/{id}/collaborators/{id}` with `{ role: newRole }`, updates row in local state on success
+  - In each collaborator row: accepted rows show an inline `<select>` dropdown (Viewer/Editor/Admin) when `canManage`; pending/declined rows show the static role badge
+  - Dropdown is disabled while the PATCH request is in flight (`changingRoleId === collab.id`)
+- Backend PATCH role endpoint was already implemented in US-004 — no backend changes needed
+- **Learnings for future iterations:**
+  - Inline role change: replace the badge with a `<select>` only when `isAccepted && canManage`; otherwise keep the badge — clean conditional rendering
+  - `setCollaborators(prev => prev.map(c => c.id === id ? {...c, role: newRole} : c))` pattern for optimistic update after PATCH
+  - `changingRoleId` string state (not boolean) allows per-row disabled state without extra complexity
+---
