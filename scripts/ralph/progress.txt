@@ -17,6 +17,7 @@ Started: Sat Feb 21 12:30:35 EST 2026
 - Frontend: use `npx tsc --noEmit` for typecheck (no "typecheck" script in package.json); `npm run lint` for ESLint
 - Frontend: `PendingInvitationsModal` uses `fixed inset-0 z-50` overlay pattern; loaded from Dashboard with `showInvitationsModal` state
 - When backend endpoint needs enriched data (project name, inviter email), use `selectinload` to eagerly load ORM relationships, then construct the Pydantic response manually
+- Frontend role gate: `canEdit = ['owner', 'admin', 'editor'].includes(project?.my_role ?? '')` — use this pattern to hide mutating UI controls from viewers
 
 ## 2026-02-21 - US-001
 - Created `ProjectCollaborator` SQLAlchemy model in `backend/models/collaborator.py`
@@ -146,4 +147,31 @@ Started: Sat Feb 21 12:30:35 EST 2026
   - `shared_by` field is `None` for owned projects, populated with inviter email for shared projects
   - Dashboard section headers ("My Projects" / "Shared with Me") only shown when both sections have entries — avoids redundant heading when only one type exists
   - `renderProjectCard` as a helper function (not a React component) works fine with `key` on the returned div — React handles keys correctly
+---
+
+## 2026-02-21 - US-009
+- Updated `frontend/src/components/ChordStaff.tsx`:
+  - Added optional `canEdit?: boolean` prop (default `true`) to `ChordStaffProps`, `Measure`, and `BeatSlot`
+  - Hide remove-measure (×) button, repeat start/end toggles, and ending number selectors when `!canEdit`
+  - Hide remove-beat popup menu when `!canEdit`; beat slot click does nothing when `!canEdit`
+- Updated `frontend/src/pages/ProjectDetail.tsx`:
+  - Added `my_role: string | null` to `Project` interface
+  - Derived `canEdit = ['owner', 'admin', 'editor'].includes(project?.my_role ?? '')`
+  - Added role badge (color-coded: owner=blue, admin=purple, editor=green, viewer=gray) below error section
+  - "New Song" button and song create form hidden when `!canEdit`
+  - "Rename" and "Delete" buttons on song rows hidden when `!canEdit`
+- Updated `frontend/src/pages/SongDetail.tsx`:
+  - Added `my_role: string | null` to `Project` interface
+  - Added `canEdit: boolean` prop to `SortableChordCardProps`
+  - Drag handle, move up/down, delete, and chord name click-to-edit hidden when `!canEdit`
+  - Guitar neck shown as static div (not clickable button) when `!canEdit`
+  - "Add Chord" button hidden when `!canEdit` (both in empty state and non-empty state)
+  - Sequence section: "Add Measure", "Save Sequence", and time signature selectors hidden when `!canEdit`
+  - Passed `canEdit` to `ChordStaff` component
+- Typecheck and lint pass (no errors)
+- **Learnings for future iterations:**
+  - `canEdit = ['owner', 'admin', 'editor'].includes(project?.my_role ?? '')` is the standard pattern for mutation permission checks in the frontend
+  - `ChordStaff.canEdit` flows down through `Measure` and `BeatSlot` — all three components need the prop
+  - Role badge colors: owner=blue-100/700, admin=purple-100/700, editor=green-100/700, viewer=gray-100/600
+  - When `project` might be null (still loading), use `project?.my_role ?? ''` for safe access
 ---
