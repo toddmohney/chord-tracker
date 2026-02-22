@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import AppLayout from '../components/AppLayout'
 
+
 interface Project {
   id: string
   name: string
@@ -130,6 +131,7 @@ export default function ProjectDetail() {
   }
 
   const canEdit = ['owner', 'admin', 'editor'].includes(project?.my_role ?? '')
+  const canManage = ['owner', 'admin'].includes(project?.my_role ?? '')
 
   const roleBadgeColors: Record<string, string> = {
     owner: 'bg-blue-100 text-blue-700',
@@ -159,12 +161,20 @@ export default function ProjectDetail() {
       )}
 
       {project?.my_role && (
-        <div className="mb-4">
+        <div className="mb-4 flex items-center justify-between gap-2">
           <span
             className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${roleBadgeColors[project.my_role] ?? 'bg-gray-100 text-gray-600'}`}
           >
             {project.my_role}
           </span>
+          {canManage && (
+            <Link
+              to={`/projects/${id}/collaborators`}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Collaborators
+            </Link>
+          )}
         </div>
       )}
 

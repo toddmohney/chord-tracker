@@ -11,6 +11,7 @@ from database.session import get_db
 from models.collaborator import CollaboratorStatus, ProjectCollaborator
 from models.user import User
 from schemas.collaborator import (
+    CollaboratorDetailResponse,
     CollaboratorInviteRequest,
     CollaboratorResponse,
     CollaboratorRoleUpdateRequest,
@@ -138,21 +139,36 @@ async def list_pending_invitations(
     ]
 
 
-@router.get("/{project_id}/collaborators", response_model=list[CollaboratorResponse])
+@router.get("/{project_id}/collaborators", response_model=list[CollaboratorDetailResponse])
 async def list_collaborators(
     project_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[ProjectCollaborator]:
+) -> list[CollaboratorDetailResponse]:
     _, role = await check_project_access(project_id, current_user, db)
 
     if role not in _ADMIN_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     collab_result = await db.execute(
-        select(ProjectCollaborator).where(ProjectCollaborator.project_id == project_id)
+        select(ProjectCollaborator)
+        .where(ProjectCollaborator.project_id == project_id)
+        .options(selectinload(ProjectCollaborator.invitee))
     )
-    return list(collab_result.scalars().all())
+    collabs = collab_result.scalars().all()
+    return [
+        CollaboratorDetailResponse(
+            id=c.id,
+            project_id=c.project_id,
+            invitee_id=c.invitee_id,
+            invitee_email=c.invitee.email,
+            role=c.role,
+            status=c.status,
+            created_at=c.created_at,
+            updated_at=c.updated_at,
+        )
+        for c in collabs
+    ]
 
 
 @router.delete(

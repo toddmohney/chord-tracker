@@ -41,3 +41,14 @@ class PendingInvitationResponse(BaseModel):
     status: CollaboratorStatus
     created_at: datetime
     updated_at: datetime
+
+
+class CollaboratorDetailResponse(BaseModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    invitee_id: uuid.UUID
+    invitee_email: str
+    role: CollaboratorRole
+    status: CollaboratorStatus
+    created_at: datetime
+    updated_at: datetime
