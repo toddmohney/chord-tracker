@@ -47,6 +47,7 @@ export default function CollaboratorsPage() {
   const [inviteError, setInviteError] = useState('')
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
   const [removing, setRemoving] = useState(false)
+  const [changingRoleId, setChangingRoleId] = useState<string | null>(null)
 
   const fetchProject = useCallback(async () => {
     const response = await apiClient(`/api/projects/${id}`)
@@ -123,6 +124,27 @@ export default function CollaboratorsPage() {
     } finally {
       setRemoving(false)
       setConfirmRemoveId(null)
+    }
+  }
+
+  async function handleRoleChange(collaboratorId: string, newRole: Role) {
+    setChangingRoleId(collaboratorId)
+    try {
+      const response = await apiClient(`/api/projects/${id}/collaborators/${collaboratorId}`, {
+        method: 'PATCH',
+        body: { role: newRole },
+      })
+      if (!response.ok) {
+        setError('Failed to update role.')
+        return
+      }
+      setCollaborators((prev) =>
+        prev.map((c) => (c.id === collaboratorId ? { ...c, role: newRole } : c)),
+      )
+    } catch {
+      setError('Failed to update role.')
+    } finally {
+      setChangingRoleId(null)
     }
   }
 
@@ -219,11 +241,26 @@ export default function CollaboratorsPage() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${ROLE_STYLES[collab.role] ?? 'bg-gray-100 text-gray-600'}`}
-                    >
-                      {collab.role}
-                    </span>
+                    {isAccepted && canManage ? (
+                      <select
+                        value={collab.role}
+                        disabled={changingRoleId === collab.id}
+                        onChange={(e) => handleRoleChange(collab.id, e.target.value as Role)}
+                        className="rounded-md border border-gray-300 px-2 py-0.5 text-xs font-medium focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {r.charAt(0).toUpperCase() + r.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${ROLE_STYLES[collab.role] ?? 'bg-gray-100 text-gray-600'}`}
+                      >
+                        {collab.role}
+                      </span>
+                    )}
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${STATUS_STYLES[collab.status] ?? 'bg-gray-100 text-gray-500'}`}
                     >
