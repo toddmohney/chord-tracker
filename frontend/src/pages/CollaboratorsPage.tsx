@@ -45,6 +45,8 @@ export default function CollaboratorsPage() {
   const [inviteRole, setInviteRole] = useState<Role>('viewer')
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState('')
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
+  const [removing, setRemoving] = useState(false)
 
   const fetchProject = useCallback(async () => {
     const response = await apiClient(`/api/projects/${id}`)
@@ -102,6 +104,25 @@ export default function CollaboratorsPage() {
       setInviteError('Failed to send invitation.')
     } finally {
       setInviting(false)
+    }
+  }
+
+  async function handleRemove(collaboratorId: string) {
+    setRemoving(true)
+    try {
+      const response = await apiClient(`/api/projects/${id}/collaborators/${collaboratorId}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) {
+        setError('Failed to remove collaborator.')
+        return
+      }
+      setCollaborators((prev) => prev.filter((c) => c.id !== collaboratorId))
+    } catch {
+      setError('Failed to remove collaborator.')
+    } finally {
+      setRemoving(false)
+      setConfirmRemoveId(null)
     }
   }
 
@@ -208,6 +229,14 @@ export default function CollaboratorsPage() {
                     >
                       {collab.status}
                     </span>
+                    {isOwner && (
+                      <button
+                        onClick={() => setConfirmRemoveId(collab.id)}
+                        className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -224,6 +253,37 @@ export default function CollaboratorsPage() {
           ← Back to project
         </Link>
       </div>
+
+      {confirmRemoveId && (() => {
+        const target = collaborators.find((c) => c.id === confirmRemoveId)
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
+              <h2 className="mb-2 text-base font-semibold text-gray-900">Remove collaborator</h2>
+              <p className="mb-4 text-sm text-gray-600">
+                Remove <span className="font-medium">{target?.invitee_email}</span> from this
+                project?
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmRemoveId(null)}
+                  disabled={removing}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleRemove(confirmRemoveId)}
+                  disabled={removing}
+                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {removing ? 'Removing...' : 'Remove'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </AppLayout>
   )
 }
